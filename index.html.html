@@ -80,6 +80,9 @@
     <div style="text-align: center; margin-top: 20px;">
       <button class="btn btn-success" onclick="showFullYear()">View Full Year</button>
       <button class="btn btn-primary" onclick="showWeeklySummary()" style="margin-left: 10px;">Pay Period Summary</button>
+      <button class="btn" onclick="exportData()" style="margin-left: 10px; background: #34c759; color: white;">💾 Export Data</button>
+      <button class="btn" onclick="document.getElementById('importFile').click()" style="margin-left: 10px; background: #007aff; color: white;">📥 Import Data</button>
+      <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
     </div>
   </div>
 
@@ -3929,6 +3932,104 @@
       const modal = document.getElementById('chartsModal');
       if (modal) modal.remove();
       currentChartType = 'pie'; // Reset to default
+    }
+    
+    // ===== DATA EXPORT/IMPORT =====
+    
+    function exportData() {
+      // Get all data from localStorage
+      const budgetData = localStorage.getItem('budgetData');
+      
+      if (!budgetData) {
+        alert('No data to export. Please set up your budget first.');
+        return;
+      }
+      
+      // Create a blob with the data
+      const dataStr = budgetData;
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      // Create download link
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0];
+      link.download = `budget-basics-backup-${date}.json`;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      alert('✅ Data exported successfully!\n\nSave this file to sync to another device.');
+    }
+    
+    function importData(event) {
+      const file = event.target.files[0];
+      
+      if (!file) return;
+      
+      if (!file.name.endsWith('.json')) {
+        alert('❌ Please select a valid .json backup file');
+        return;
+      }
+      
+      // Confirm before overwriting
+      const confirm = window.confirm(
+        '⚠️ Import Data\n\n' +
+        'This will replace ALL your current data with the imported data.\n\n' +
+        'Current data will be lost. Continue?'
+      );
+      
+      if (!confirm) {
+        event.target.value = ''; // Reset file input
+        return;
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        try {
+          const importedData = e.target.result;
+          
+          // Validate it's valid JSON
+          JSON.parse(importedData);
+          
+          // Save to localStorage
+          localStorage.setItem('budgetData', importedData);
+          
+          // Reload the data
+          data = JSON.parse(importedData);
+          
+          // Ensure new fields exist
+          data.dismissedRecurring = data.dismissedRecurring || [];
+          data.dismissedDuplicates = data.dismissedDuplicates || [];
+          data.categoryReassignments = data.categoryReassignments || {};
+          data.amountOverrides = data.amountOverrides || [];
+          
+          // Refresh the UI
+          renderBillsList();
+          renderSavingsList();
+          renderDebtsList();
+          renderCalendar();
+          renderSummary();
+          
+          alert('✅ Data imported successfully!\n\nYour budget has been updated.');
+          
+          // Reset file input
+          event.target.value = '';
+          
+        } catch (error) {
+          alert('❌ Error importing data.\n\nPlease make sure you selected a valid Budget Basics backup file.');
+          console.error('Import error:', error);
+          event.target.value = '';
+        }
+      };
+      
+      reader.readAsText(file);
     }
     
     function drawCategoryPieChart(categories) {
