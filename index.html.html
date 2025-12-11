@@ -1,0 +1,4340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Budget Basics">
+  <title>Budget Basics</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .header h1 { font-size: 28px; color: #1d1d1f; margin-bottom: 8px; }
+    .buttons { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .btn { padding: 12px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: #007aff; color: white; }
+    .btn-success { background: #34c759; color: white; }
+    .btn-danger { background: #ff3b30; color: white; }
+    .calendar { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); background: #f5f5f7; border-bottom: 1px solid #e5e5e7; }
+    .calendar-header div { padding: 12px; text-align: center; font-weight: 600; color: #86868b; font-size: 14px; }
+    .calendar-body { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .day { padding: 12px; border-bottom: 1px solid #f5f5f7; border-right: 1px solid #f5f5f7; min-height: 80px; }
+    .day-number { font-weight: 600; color: #1d1d1f; margin-bottom: 8px; }
+    .event { background: #e3f2fd; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #1976d2; margin-top: 4px; }
+    .event.payday { background: #e8f5e9; color: #2e7d32; }
+    .event.debt { background: #ffe8e8; color: #c62828; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; overflow-y: auto; }
+    .modal.show { display: flex; }
+    .modal-content { background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; margin: 20px; }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #86868b; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #1d1d1f; font-size: 14px; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 16px; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .summary-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .summary-card h3 { font-size: 14px; color: #86868b; margin-bottom: 8px; }
+    .summary-card .value { font-size: 24px; font-weight: 700; color: #1d1d1f; }
+    .item-list { margin-top: 20px; }
+    .item { background: #f5f5f7; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .item-name { font-weight: 600; }
+    .item-amount { color: #007aff; }
+    .delete-btn { background: #ff3b30; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .help-text { font-size: 12px; color: #86868b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💰 Budget Basics</h1>
+      <p style="color: #86868b;">Simple financial planning</p>
+      <div class="buttons">
+        <button class="btn btn-primary" onclick="showModal('income')">Income</button>
+        <button class="btn btn-primary" onclick="showModal('bills')">Bills</button>
+        <button class="btn btn-primary" onclick="showModal('savings')">Savings</button>
+        <button class="btn btn-primary" onclick="showModal('debts')">Debts</button>
+        <button class="btn" style="background: #34c759;" onclick="showModal('statements')">📊 Analyze Bank Statements</button>
+      </div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <button class="btn btn-primary" onclick="changeMonth(-1)">← Previous Month</button>
+      <h2 id="currentMonthYear" style="font-size: 24px; font-weight: 600; color: #1d1d1f;"></h2>
+      <button class="btn btn-primary" onclick="changeMonth(1)">Next Month →</button>
+    </div>
+
+    <div class="calendar">
+      <div class="calendar-header">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div class="calendar-body" id="calendar"></div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+      <button class="btn btn-success" onclick="showFullYear()">View Full Year</button>
+      <button class="btn btn-primary" onclick="showWeeklySummary()" style="margin-left: 10px;">Pay Period Summary</button>
+    </div>
+  </div>
+
+  <!-- Full Year Modal -->
+  <div id="fullyear-modal" class="modal">
+    <div style="background: white; border-radius: 16px; padding: 24px; max-width: 95vw; width: 1400px; max-height: 90vh; overflow-y: auto; margin: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: white; z-index: 10; padding-bottom: 10px; border-bottom: 2px solid #e5e5e7;">
+        <h2 style="font-size: 24px; font-weight: 600;">Full Year Calendar - <span id="fullYearTitle"></span></h2>
+        <button class="close-btn" onclick="hideModal('fullyear')">&times;</button>
+      </div>
+      <div id="fullYearCalendar" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;"></div>
+    </div>
+  </div>
+
+  <!-- Weekly Summary Modal -->
+  <div id="weekly-modal" class="modal">
+    <div style="background: white; border-radius: 16px; padding: 24px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; margin: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: white; z-index: 10; padding-bottom: 10px; border-bottom: 2px solid #e5e5e7;">
+        <h2 style="font-size: 24px; font-weight: 600;">Pay Period Summary</h2>
+        <button class="close-btn" onclick="hideModal('weekly')">&times;</button>
+      </div>
+      <div id="weeklySummary"></div>
+    </div>
+  </div>
+
+  <!-- Income Modal -->
+  <div id="income-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Income Settings</h2>
+        <button class="close-btn" onclick="hideModal('income')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Pay Frequency</label>
+        <select id="payFrequency">
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Take Home Pay ($)</label>
+        <input type="number" id="takeHomePay" placeholder="2000">
+      </div>
+      <div class="form-group">
+        <label>First Pay Date</label>
+        <input type="date" id="firstPayDate">
+      </div>
+      <button class="btn btn-success" style="width: 100%;" onclick="saveIncome()">Save Income</button>
+    </div>
+  </div>
+
+  <!-- Bills Modal -->
+  <div id="bills-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Bills</h2>
+        <button class="close-btn" onclick="hideModal('bills')">&times;</button>
+      </div>
+      
+      <div class="form-group">
+        <label>Bill Name</label>
+        <input type="text" id="billName" placeholder="Xfinity Mobile">
+      </div>
+      <div class="form-group">
+        <label>Amount ($)</label>
+        <input type="number" id="billAmount" placeholder="100">
+      </div>
+      <div class="form-group">
+        <label>Frequency</label>
+        <select id="billFrequency" onchange="updateBillDueDayLabel()">
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Every 3 Months (Quarterly)</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Due Day (<span id="dueDayLabel">1-31 for monthly</span>)</label>
+        <input type="number" id="billDueDay" placeholder="13" min="1" max="31">
+        <div class="help-text" id="dueDayHelp">Enter the day of the month the bill is due</div>
+      </div>
+      <div class="form-group" id="firstBillDateGroup" style="display: none;">
+        <label>First Bill Date</label>
+        <input type="date" id="billFirstDate">
+        <div class="help-text">When is the first payment due?</div>
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-bottom: 10px;" onclick="addBill()">Add Bill</button>
+      
+      <div class="item-list" id="billsList"></div>
+    </div>
+  </div>
+
+  <!-- Savings Modal -->
+  <div id="savings-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Savings & Deductions</h2>
+        <button class="close-btn" onclick="hideModal('savings')">&times;</button>
+      </div>
+      
+      <div class="form-group">
+        <label>Deduction Name</label>
+        <input type="text" id="savingsName" placeholder="Savings Account">
+      </div>
+      <div class="form-group">
+        <label>Amount ($)</label>
+        <input type="number" id="savingsAmount" placeholder="100">
+      </div>
+      
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select id="savingsPaymentMethod" onchange="updateSavingsPaymentMethod()">
+          <option value="frequency">Recurring (Every Paycheck/Weekly/Bi-weekly/Monthly/Quarterly)</option>
+          <option value="date">Specific Date(s) Each Month</option>
+        </select>
+      </div>
+      
+      <!-- Frequency-based deduction fields -->
+      <div id="savingsFrequencyFields">
+        <div class="form-group">
+          <label>Deduction Frequency</label>
+          <select id="savingsFrequency" onchange="updateSavingsFrequencyFields()">
+            <option value="everyPaycheck">Every Paycheck</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Bi-weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly (Every 3 Months)</option>
+          </select>
+        </div>
+        <div class="form-group" id="savingsFreqDayGroup" style="display: none;">
+          <label><span id="savingsFreqDayLabel">Day (1-31)</span></label>
+          <input type="number" id="savingsFreqDay" placeholder="15" min="0" max="31">
+          <div class="help-text" id="savingsFreqDayHelp">Day of the month</div>
+        </div>
+        <div class="form-group" id="savingsFreqFirstDateGroup" style="display: none;">
+          <label>First Date</label>
+          <input type="date" id="savingsFreqFirstDate">
+          <div class="help-text">When does this deduction start?</div>
+        </div>
+      </div>
+      
+      <!-- Date-based deduction fields -->
+      <div id="savingsDateFields" style="display: none;">
+        <div class="form-group">
+          <label>Deduction Day (1-31)</label>
+          <input type="number" id="savingsDay" placeholder="15" min="1" max="31">
+          <div class="help-text">Day of month for deduction</div>
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="savingsSplitPayment" onchange="toggleSavingsSplit()" style="width: auto;">
+            <span>Split across 2 dates</span>
+          </label>
+        </div>
+        <div class="form-group" id="savingsSecondDayGroup" style="display: none;">
+          <label>Second Deduction Day (1-31)</label>
+          <input type="number" id="savingsDay2" placeholder="29" min="1" max="31">
+          <div class="help-text">Day for the second half of deduction</div>
+        </div>
+      </div>
+      
+      <button class="btn btn-success" style="width: 100%; margin-bottom: 10px;" onclick="addSavings()">Add Deduction</button>
+      
+      <div class="item-list" id="savingsList"></div>
+    </div>
+  </div>
+
+  <!-- Debts Modal -->
+  <div id="debts-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Debt Tracker</h2>
+        <button class="close-btn" onclick="hideModal('debts')">&times;</button>
+      </div>
+      
+      <div class="form-group">
+        <label>Debt Name</label>
+        <input type="text" id="debtName" placeholder="Auto Loan">
+      </div>
+      <div class="form-group">
+        <label>Current Balance ($)</label>
+        <input type="number" id="debtBalance" placeholder="19000">
+      </div>
+      <div class="form-group">
+        <label>Interest Rate (%)</label>
+        <input type="number" id="debtRate" placeholder="5.5" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>Payment Amount ($)</label>
+        <input type="number" id="debtPayment" placeholder="350">
+        <div class="help-text">Your regular payment amount</div>
+      </div>
+      
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select id="debtPaymentMethod" onchange="updateDebtPaymentMethod()">
+          <option value="frequency">Recurring (Weekly/Bi-weekly/Monthly/Quarterly)</option>
+          <option value="date">Specific Date(s) Each Month</option>
+        </select>
+      </div>
+      
+      <!-- Frequency-based payment fields -->
+      <div id="debtFrequencyFields">
+        <div class="form-group">
+          <label>Payment Frequency</label>
+          <select id="debtFrequency" onchange="updateDebtFrequencyFields()">
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Bi-weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly (Every 3 Months)</option>
+          </select>
+        </div>
+        <div class="form-group" id="debtFreqDayGroup">
+          <label><span id="debtFreqDayLabel">Day of Week (0=Sun, 6=Sat)</span></label>
+          <input type="number" id="debtFreqDay" placeholder="1" min="0" max="31">
+          <div class="help-text" id="debtFreqDayHelp">Day of the week for weekly payments</div>
+        </div>
+        <div class="form-group">
+          <label>First Payment Date</label>
+          <input type="date" id="debtFreqFirstDate">
+          <div class="help-text">When is the first payment due?</div>
+        </div>
+      </div>
+      
+      <!-- Date-based payment fields -->
+      <div id="debtDateFields" style="display: none;">
+        <div class="form-group">
+          <label>Payment Day (1-31)</label>
+          <input type="number" id="debtPaymentDay" placeholder="15" min="1" max="31">
+          <div class="help-text">Day of month when payment is due</div>
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="debtSplitPayment" onchange="toggleDebtSplit()" style="width: auto;">
+            <span>Split payment across 2 dates</span>
+          </label>
+        </div>
+        <div class="form-group" id="debtSecondPaymentDayGroup" style="display: none;">
+          <label>Second Payment Day (1-31)</label>
+          <input type="number" id="debtPaymentDay2" placeholder="29" min="1" max="31">
+          <div class="help-text">Day for the second half of payment</div>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>Extra Payment (optional) ($)</label>
+        <input type="number" id="debtExtraPayment" placeholder="0">
+        <div class="help-text">Additional amount toward principal</div>
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-bottom: 10px;" onclick="addDebt()">Add Debt</button>
+      
+      <div class="item-list" id="debtsList"></div>
+    </div>
+  </div>
+
+  <!-- Bank Statements Modal -->
+  <div id="statements-modal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h2>Analyze Bank Statements</h2>
+        <button class="close-btn" onclick="hideModal('statements')">&times;</button>
+      </div>
+      
+      <div class="form-group">
+        <label>Upload Bank Statement(s) (CSV or PDF format)</label>
+        <input type="file" id="statementFiles" multiple accept=".csv,.pdf" style="padding: 10px; border: 2px dashed #007aff; border-radius: 8px; background: #f5f5f7;">
+        <div class="help-text">Upload one or more bank statements in CSV or PDF format. Most banks allow CSV/PDF export.</div>
+      </div>
+      
+      <button class="btn btn-success" style="width: 100%; margin-bottom: 20px;" onclick="analyzeStatements()">🔍 Analyze Statements</button>
+      
+      <div style="margin-bottom: 10px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+          <input type="checkbox" id="debugMode" style="width: auto;">
+          <span>Debug Mode (Show raw extracted text)</span>
+        </label>
+      </div>
+      
+      <div id="debugOutput" style="display: none; background: #f5f5f7; padding: 16px; border-radius: 8px; margin-bottom: 20px; max-height: 300px; overflow-y: auto;">
+        <h4 style="margin: 0 0 10px 0;">Debug Output:</h4>
+        <pre id="debugText" style="font-size: 11px; white-space: pre-wrap; word-wrap: break-word;"></pre>
+      </div>
+      
+      <div id="statementAnalysis" style="display: none;">
+        <h3 style="margin-top: 20px; margin-bottom: 10px;">📊 Spending Analysis</h3>
+        <div id="categoryBreakdown"></div>
+        
+        <h3 style="margin-top: 30px; margin-bottom: 10px;">🔁 Recurring Payments Detected</h3>
+        <div id="recurringPayments"></div>
+        
+        <h3 style="margin-top: 30px; margin-bottom: 10px;">⚠️ Possible Duplicates</h3>
+        <div id="duplicatePayments"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Load data
+    let data = JSON.parse(localStorage.getItem('budgetData') || '{"income":{},"bills":[],"savings":[],"debts":[],"paymentExceptions":[],"dismissedRecurring":[],"dismissedDuplicates":[],"categoryReassignments":{},"amountOverrides":[]}');
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+    
+    // Ensure new fields exist
+    data.dismissedRecurring = data.dismissedRecurring || [];
+    data.dismissedDuplicates = data.dismissedDuplicates || [];
+    data.categoryReassignments = data.categoryReassignments || {};
+    data.amountOverrides = data.amountOverrides || [];
+
+    function changeMonth(direction) {
+      currentMonth += direction;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      } else if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      renderCalendar();
+      updateMonthYearDisplay();
+    }
+
+    function updateMonthYearDisplay() {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+      document.getElementById('currentMonthYear').textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    }
+
+    function showFullYear() {
+      document.getElementById('fullYearTitle').textContent = currentYear;
+      renderFullYearCalendar();
+      showModal('fullyear');
+    }
+
+    function showWeeklySummary() {
+      renderWeeklySummary();
+      showModal('weekly');
+    }
+
+    function renderWeeklySummary() {
+      const container = document.getElementById('weeklySummary');
+      
+      if (!data.income.firstDate || !data.income.amount) {
+        container.innerHTML = '<p style="text-align: center; color: #86868b; padding: 40px;">Please set up your income first to see weekly summary.</p>';
+        return;
+      }
+
+      // Get all pay dates for the next several months
+      const today = new Date();
+      const allPayDates = [];
+      
+      for (let monthOffset = -1; monthOffset <= 4; monthOffset++) {
+        const checkDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+        const monthPayDates = getPayDates(checkDate.getFullYear(), checkDate.getMonth());
+        allPayDates.push(...monthPayDates);
+      }
+      
+      // Sort pay dates
+      allPayDates.sort((a, b) => a - b);
+      
+      // Find the most recent payday before or on today
+      let startPayIndex = 0;
+      for (let i = 0; i < allPayDates.length; i++) {
+        if (allPayDates[i] <= today) {
+          startPayIndex = i;
+        } else {
+          break;
+        }
+      }
+      
+      // Create pay periods (payday to payday)
+      const payPeriods = [];
+      for (let i = startPayIndex; i < Math.min(startPayIndex + 12, allPayDates.length - 1); i++) {
+        payPeriods.push({
+          number: i - startPayIndex + 1,
+          payDate: allPayDates[i],
+          nextPayDate: allPayDates[i + 1]
+        });
+      }
+
+      let html = '<div style="display: flex; flex-direction: column; gap: 16px;">';
+      
+      payPeriods.forEach(period => {
+        const isCurrentPeriod = today >= period.payDate && today < period.nextPayDate;
+        
+        // Collect all transactions for this pay period
+        const transactions = [];
+        
+        // Add the payday
+        transactions.push({
+          date: new Date(period.payDate),
+          type: 'income',
+          name: 'Payday',
+          amount: parseFloat(data.income.amount) || 0
+        });
+        
+        // Add deductions that come out of this payday
+        data.savings.forEach(saving => {
+          if (saving.frequency === 'everyPaycheck') {
+            console.log(`  Payday deduction: ${saving.name} = $${saving.amount}`);
+            transactions.push({
+              date: new Date(period.payDate),
+              type: 'deduction',
+              name: saving.name,
+              amount: -(parseFloat(saving.amount) || 0)
+            });
+          }
+        });
+        
+        // Add bills, debts, and savings for each day in this pay period
+        console.log(`\n=== Collecting items for Pay Period ${period.number} ===`);
+        console.log(`Period: ${period.payDate.toLocaleDateString()} to ${period.nextPayDate.toLocaleDateString()}`);
+        console.log(`Bills to check: ${data.bills.length}, Debts to check: ${data.debts.length}, Savings to check: ${data.savings.length}`);
+        
+        let currentDate = new Date(period.payDate);
+        // Start from payday itself to catch all items
+        
+        let debugBills = 0, debugDebts = 0, debugSavings = 0;
+        let debugEveryPaycheckCount = 0;
+        
+        while (currentDate < period.nextPayDate) {
+          const day = currentDate.getDate();
+          const month = currentDate.getMonth();
+          const year = currentDate.getFullYear();
+          
+          console.log(`  Checking ${month+1}/${day}/${year} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][currentDate.getDay()]})`);
+          
+          // BILLS
+          const bills = getBillsForDay(day, month, year);
+          if (bills.length > 0) {
+            console.log(`${month+1}/${day}: Found ${bills.length} bills:`, bills.map(b => b.name));
+          }
+          bills.forEach(bill => {
+            debugBills++;
+            transactions.push({
+              date: new Date(currentDate),
+              type: 'bill',
+              name: bill.name,
+              amount: -(parseFloat(bill.amount) || 0)
+            });
+          });
+          
+          // DEBTS
+          const debts = getDebtsForDay(day, month, year);
+          if (debts.length > 0) {
+            console.log(`${month+1}/${day}: Found ${debts.length} debts:`, debts.map(d => `${d.name} ($${d.displayAmount || d.payment})`));
+          }
+          debts.forEach(debt => {
+            debugDebts++;
+            const amount = parseFloat(debt.displayAmount || debt.payment) || 0;
+            transactions.push({
+              date: new Date(currentDate),
+              type: 'debt',
+              name: debt.name,
+              amount: -amount
+            });
+          });
+          
+          // SAVINGS
+          const savings = getSavingsForDay(day, month, year);
+          if (savings.length > 0) {
+            console.log(`${month+1}/${day}: Found ${savings.length} savings:`, savings.map(s => s.name));
+          }
+          savings.forEach(saving => {
+            // Skip everyPaycheck items - they're already added at the top
+            if (saving.frequency === 'everyPaycheck') {
+              console.log(`  Skipping ${saving.name} (everyPaycheck already counted)`);
+              debugEveryPaycheckCount++;
+              return;
+            }
+            debugSavings++;
+            transactions.push({
+              date: new Date(currentDate),
+              type: 'deduction',
+              name: saving.name,
+              amount: -(parseFloat(saving.displayAmount || saving.amount) || 0)
+            });
+          });
+          
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        console.log(`\n=== Pay Period ${period.number} Summary ===`);
+        console.log(`Collected: ${debugBills} bills, ${debugDebts} debts, ${debugSavings} savings (+ ${debugEveryPaycheckCount} everyPaycheck already counted)`);
+        console.log(`Total transactions in period: ${transactions.length}`);
+        
+        // Sort by date
+        transactions.sort((a, b) => a.date - b.date);
+        
+        // Calculate totals
+        const moneyIn = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+        const moneyOut = Math.abs(transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+        const remaining = moneyIn - moneyOut;
+        
+        const daysDiff = Math.ceil((period.nextPayDate - period.payDate) / (1000 * 60 * 60 * 24));
+        
+        html += `
+          <div style="background: ${isCurrentPeriod ? '#e0e7ff' : 'white'}; border: 2px solid ${isCurrentPeriod ? '#6366f1' : '#e5e5e7'}; border-radius: 12px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <div style="font-weight: 600; font-size: 18px; color: #1d1d1f;">
+                  ${isCurrentPeriod ? '📍 ' : ''}Pay Period ${period.number}
+                </div>
+                <div style="font-size: 14px; color: #64748b; margin-top: 4px;">
+                  ${period.payDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} → ${period.nextPayDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} (${daysDiff} days)
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 24px; font-weight: 700; color: ${remaining >= 0 ? '#059669' : '#dc2626'};">
+                  $${remaining.toFixed(2)}
+                </div>
+                <div style="font-size: 12px; color: #86868b;">Remaining</div>
+              </div>
+            </div>
+            
+            ${transactions.length > 0 ? `
+              <div style="background: #f8fafc; border-radius: 8px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: #e5e5e7;">
+                      <th style="padding: 10px; text-align: left; font-size: 12px; color: #64748b; font-weight: 600;">Date</th>
+                      <th style="padding: 10px; text-align: left; font-size: 12px; color: #64748b; font-weight: 600;">Description</th>
+                      <th style="padding: 10px; text-align: left; font-size: 12px; color: #64748b; font-weight: 600;">Type</th>
+                      <th style="padding: 10px; text-align: right; font-size: 12px; color: #64748b; font-weight: 600;">Amount</th>
+                      <th style="padding: 10px; text-align: right; font-size: 12px; color: #64748b; font-weight: 600;">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${transactions.map((t, idx) => {
+                      const typeColors = {
+                        income: { bg: '#f0fdf4', text: '#059669', icon: '💰' },
+                        deduction: { bg: '#fef3c7', text: '#d97706', icon: '🏦' },
+                        bill: { bg: '#dbeafe', text: '#2563eb', icon: '📄' },
+                        debt: { bg: '#fee2e2', text: '#dc2626', icon: '🚗' }
+                      };
+                      const style = typeColors[t.type];
+                      
+                      // Calculate running balance
+                      let balance = 0;
+                      for (let i = 0; i <= idx; i++) {
+                        balance += transactions[i].amount;
+                      }
+                      
+                      return `
+                        <tr style="border-bottom: 1px solid #e5e5e7; background: ${idx % 2 === 0 ? 'white' : '#f8fafc'};">
+                          <td style="padding: 12px; font-size: 13px; color: #64748b;">${t.date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</td>
+                          <td style="padding: 12px; font-size: 14px; font-weight: 500; color: #1e293b;">${t.name}</td>
+                          <td style="padding: 12px;">
+                            <span style="display: inline-block; padding: 4px 8px; background: ${style.bg}; color: ${style.text}; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                              ${style.icon} ${t.type.charAt(0).toUpperCase() + t.type.slice(1)}
+                            </span>
+                          </td>
+                          <td style="padding: 12px; text-align: right; font-size: 15px; font-weight: 600; color: ${t.amount > 0 ? '#059669' : '#dc2626'};">
+                            ${t.amount > 0 ? '+' : ''}$${Math.abs(t.amount).toFixed(2)}
+                          </td>
+                          <td style="padding: 12px; text-align: right; font-size: 14px; font-weight: 600; color: ${balance >= 0 ? '#059669' : '#dc2626'};">
+                            $${balance.toFixed(2)}
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #e5e5e7; font-weight: 700;">
+                      <td colspan="4" style="padding: 12px; font-size: 14px; color: #1e293b;">Period Total</td>
+                      <td style="padding: 12px; text-align: right; font-size: 16px; color: ${remaining >= 0 ? '#059669' : '#dc2626'};">
+                        $${remaining.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ` : `
+              <div style="text-align: center; padding: 20px; color: #86868b; font-size: 14px;">
+                No transactions this period
+              </div>
+            `}
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    function renderFullYearCalendar() {
+      const container = document.getElementById('fullYearCalendar');
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      let html = '';
+      
+      for (let month = 0; month < 12; month++) {
+        const firstDay = new Date(currentYear, month, 1);
+        const lastDay = new Date(currentYear, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startDay = firstDay.getDay();
+        
+        const payDates = getPayDates(currentYear, month);
+        
+        html += `
+          <div style="background: white; border: 1px solid #e5e5e7; border-radius: 12px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px; text-align: center; font-weight: 600;">
+              ${monthNames[month]}
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); font-size: 10px;">
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">S</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">M</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">T</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">W</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">T</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">F</div>
+              <div style="padding: 4px; text-align: center; font-weight: 600; color: #86868b;">S</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr);">
+        `;
+        
+        // Previous month padding
+        for (let i = 0; i < startDay; i++) {
+          html += `<div style="padding: 8px; min-height: 40px;"></div>`;
+        }
+        
+        // Days of month
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(currentYear, month, day);
+          const isPayday = payDates.some(pd => pd.getDate() === day);
+          const bills = getBillsForDay(day, month, currentYear);
+          const debts = getDebtsForDay(day, month, currentYear);
+          const isToday = date.toDateString() === new Date().toDateString();
+          
+          const hasEvents = isPayday || bills.length > 0 || debts.length > 0;
+          
+          html += `
+            <div style="padding: 6px; min-height: 40px; border: 1px solid #f5f5f7; ${isToday ? 'background: #e0e7ff;' : ''} ${hasEvents ? 'background: ' + (isPayday ? '#f0fdf4' : '#fef3c7') + ';' : ''}">
+              <div style="font-weight: 600; font-size: 11px; margin-bottom: 2px;">${day}</div>
+              ${isPayday ? '<div style="font-size: 9px; color: #059669;">💰</div>' : ''}
+              ${bills.length > 0 ? '<div style="font-size: 9px; color: #2563eb;">📄</div>' : ''}
+              ${debts.length > 0 ? '<div style="font-size: 9px; color: #dc2626;">🚗</div>' : ''}
+            </div>
+          `;
+        }
+        
+        html += `
+            </div>
+          </div>
+        `;
+      }
+      
+      container.innerHTML = html;
+    }
+
+    function updateBillDueDayLabel() {
+      const frequency = document.getElementById('billFrequency').value;
+      const label = document.getElementById('dueDayLabel');
+      const input = document.getElementById('billDueDay');
+      const help = document.getElementById('dueDayHelp');
+      const firstDateGroup = document.getElementById('firstBillDateGroup');
+      
+      if (frequency === 'weekly') {
+        label.textContent = '0=Sun, 1=Mon, ... 6=Sat';
+        help.textContent = 'Enter the day of the week (0 for Sunday, 6 for Saturday)';
+        input.max = 6;
+        input.min = 0;
+        firstDateGroup.style.display = 'none';
+      } else if (frequency === 'quarterly') {
+        label.textContent = '1-31';
+        help.textContent = 'Day of the month when bill is due';
+        input.max = 31;
+        input.min = 1;
+        firstDateGroup.style.display = 'block';
+      } else {
+        label.textContent = '1-31 for monthly';
+        help.textContent = 'Enter the day of the month the bill is due';
+        input.max = 31;
+        input.min = 1;
+        firstDateGroup.style.display = 'none';
+      }
+    }
+
+    function toggleSplitPayment() {
+      const isChecked = document.getElementById('debtSplitPayment').checked;
+      const secondPaymentGroup = document.getElementById('debtSecondPaymentDayGroup');
+      secondPaymentGroup.style.display = isChecked ? 'block' : 'none';
+    }
+    
+    function toggleDebtSplit() {
+      toggleSplitPayment();
+    }
+
+    function updateDebtPaymentMethod() {
+      const method = document.getElementById('debtPaymentMethod').value;
+      const frequencyFields = document.getElementById('debtFrequencyFields');
+      const dateFields = document.getElementById('debtDateFields');
+      
+      if (method === 'frequency') {
+        frequencyFields.style.display = 'block';
+        dateFields.style.display = 'none';
+      } else {
+        frequencyFields.style.display = 'none';
+        dateFields.style.display = 'block';
+      }
+    }
+
+    function updateDebtFrequencyFields() {
+      const frequency = document.getElementById('debtFrequency').value;
+      const dayGroup = document.getElementById('debtFreqDayGroup');
+      const dayLabel = document.getElementById('debtFreqDayLabel');
+      const dayHelp = document.getElementById('debtFreqDayHelp');
+      const dayInput = document.getElementById('debtFreqDay');
+      
+      if (frequency === 'weekly') {
+        dayGroup.style.display = 'block';
+        dayLabel.textContent = 'Day of Week (0=Sun, 6=Sat)';
+        dayHelp.textContent = 'Day of the week (0 for Sunday, 6 for Saturday)';
+        dayInput.max = 6;
+        dayInput.min = 0;
+      } else if (frequency === 'monthly') {
+        dayGroup.style.display = 'block';
+        dayLabel.textContent = 'Day of Month (1-31)';
+        dayHelp.textContent = 'Day of the month';
+        dayInput.max = 31;
+        dayInput.min = 1;
+      } else if (frequency === 'quarterly') {
+        dayGroup.style.display = 'block';
+        dayLabel.textContent = 'Day of Month (1-31)';
+        dayHelp.textContent = 'Day of the month for quarterly payment';
+        dayInput.max = 31;
+        dayInput.min = 1;
+      } else if (frequency === 'biweekly') {
+        dayGroup.style.display = 'none';
+      }
+    }
+
+    function updateSavingsFrequencyFields() {
+      const method = document.getElementById('savingsPaymentMethod').value;
+      
+      if (method === 'frequency') {
+        const frequency = document.getElementById('savingsFrequency').value;
+        const dayGroup = document.getElementById('savingsFreqDayGroup');
+        const firstDateGroup = document.getElementById('savingsFreqFirstDateGroup');
+        const dayLabel = document.getElementById('savingsFreqDayLabel');
+        const dayHelp = document.getElementById('savingsFreqDayHelp');
+        const dayInput = document.getElementById('savingsFreqDay');
+        
+        if (frequency === 'everyPaycheck') {
+          dayGroup.style.display = 'none';
+          firstDateGroup.style.display = 'none';
+        } else if (frequency === 'weekly') {
+          dayGroup.style.display = 'block';
+          firstDateGroup.style.display = 'block';
+          dayLabel.textContent = 'Day of Week (0=Sun, 6=Sat)';
+          dayHelp.textContent = 'Day of the week (0 for Sunday, 6 for Saturday)';
+          dayInput.max = 6;
+          dayInput.min = 0;
+        } else if (frequency === 'biweekly') {
+          dayGroup.style.display = 'none';
+          firstDateGroup.style.display = 'block';
+        } else if (frequency === 'monthly') {
+          dayGroup.style.display = 'block';
+          firstDateGroup.style.display = 'none';
+          dayLabel.textContent = 'Day of Month (1-31)';
+          dayHelp.textContent = 'Day of the month';
+          dayInput.max = 31;
+          dayInput.min = 1;
+        } else if (frequency === 'quarterly') {
+          dayGroup.style.display = 'block';
+          firstDateGroup.style.display = 'block';
+          dayLabel.textContent = 'Day of Month (1-31)';
+          dayHelp.textContent = 'Day of the month for quarterly deduction';
+          dayInput.max = 31;
+          dayInput.min = 1;
+        }
+      }
+    }
+
+    function updateSavingsPaymentMethod() {
+      const method = document.getElementById('savingsPaymentMethod').value;
+      const frequencyFields = document.getElementById('savingsFrequencyFields');
+      const dateFields = document.getElementById('savingsDateFields');
+      
+      if (method === 'frequency') {
+        frequencyFields.style.display = 'block';
+        dateFields.style.display = 'none';
+        updateSavingsFrequencyFields();
+      } else {
+        frequencyFields.style.display = 'none';
+        dateFields.style.display = 'block';
+      }
+    }
+
+    function toggleSavingsSplit() {
+      const isChecked = document.getElementById('savingsSplitPayment').checked;
+      const secondDayGroup = document.getElementById('savingsSecondDayGroup');
+      secondDayGroup.style.display = isChecked ? 'block' : 'none';
+    }
+
+    function showModal(type) {
+      document.getElementById(type + '-modal').classList.add('show');
+      if (type === 'income' && data.income) {
+        document.getElementById('payFrequency').value = data.income.frequency || 'biweekly';
+        document.getElementById('takeHomePay').value = data.income.amount || '';
+        document.getElementById('firstPayDate').value = data.income.firstDate || '';
+      }
+      if (type === 'bills') {
+        renderBillsList();
+        updateBillDueDayLabel();
+      }
+      if (type === 'savings') {
+        renderSavingsList();
+        updateSavingsPaymentMethod();
+      }
+      if (type === 'debts') {
+        renderDebtsList();
+        updateDebtPaymentMethod();
+        updateDebtFrequencyFields();
+      }
+    }
+
+    function hideModal(type) {
+      document.getElementById(type + '-modal').classList.remove('show');
+    }
+
+    function saveIncome() {
+      data.income = {
+        frequency: document.getElementById('payFrequency').value,
+        amount: document.getElementById('takeHomePay').value,
+        firstDate: document.getElementById('firstPayDate').value
+      };
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      hideModal('income');
+      renderCalendar();
+      renderSummary();
+    }
+
+    function addBill() {
+      const name = document.getElementById('billName').value;
+      const amount = document.getElementById('billAmount').value;
+      const frequency = document.getElementById('billFrequency').value;
+      const dueDay = document.getElementById('billDueDay').value;
+      const firstDate = document.getElementById('billFirstDate').value;
+      
+      if (!name || !amount || !dueDay) {
+        alert('Please fill in all required fields');
+        return;
+      }
+      
+      if (frequency === 'quarterly' && !firstDate) {
+        alert('Please select the first bill date for quarterly bills');
+        return;
+      }
+      
+      data.bills.push({ 
+        name, 
+        amount, 
+        frequency, 
+        dueDay: parseInt(dueDay),
+        firstDate: frequency === 'quarterly' ? firstDate : null
+      });
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      document.getElementById('billName').value = '';
+      document.getElementById('billAmount').value = '';
+      document.getElementById('billDueDay').value = '';
+      document.getElementById('billFirstDate').value = '';
+      
+      renderBillsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function addSavings() {
+      const name = document.getElementById('savingsName').value;
+      const amount = document.getElementById('savingsAmount').value;
+      const paymentMethod = document.getElementById('savingsPaymentMethod').value;
+      
+      if (!name || !amount) {
+        alert('Please fill in name and amount');
+        return;
+      }
+      
+      let savingsData = {
+        name,
+        amount,
+        paymentMethod: paymentMethod
+      };
+      
+      if (paymentMethod === 'frequency') {
+        const frequency = document.getElementById('savingsFrequency').value;
+        const freqDay = document.getElementById('savingsFreqDay').value;
+        const firstDate = document.getElementById('savingsFreqFirstDate').value;
+        
+        if (frequency !== 'everyPaycheck' && frequency !== 'biweekly' && !freqDay) {
+          alert('Please enter the day');
+          return;
+        }
+        
+        if ((frequency === 'weekly' || frequency === 'biweekly' || frequency === 'quarterly') && !firstDate) {
+          alert('Please select the first date');
+          return;
+        }
+        
+        savingsData.frequency = frequency;
+        savingsData.day = freqDay ? parseInt(freqDay) : null;
+        savingsData.firstDate = firstDate || null;
+      } else {
+        const day = document.getElementById('savingsDay').value;
+        const isSplit = document.getElementById('savingsSplitPayment').checked;
+        const day2 = document.getElementById('savingsDay2').value;
+        
+        if (!day) {
+          alert('Please enter the deduction day');
+          return;
+        }
+        
+        if (isSplit && !day2) {
+          alert('Please enter the second deduction day');
+          return;
+        }
+        
+        savingsData.day = parseInt(day);
+        savingsData.isSplit = isSplit;
+        savingsData.day2 = isSplit ? parseInt(day2) : null;
+      }
+      
+      data.savings.push(savingsData);
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Clear form
+      document.getElementById('savingsName').value = '';
+      document.getElementById('savingsAmount').value = '';
+      document.getElementById('savingsPaymentMethod').value = 'frequency';
+      document.getElementById('savingsFrequency').value = 'everyPaycheck';
+      document.getElementById('savingsFreqDay').value = '';
+      document.getElementById('savingsFreqFirstDate').value = '';
+      document.getElementById('savingsDay').value = '';
+      document.getElementById('savingsDay2').value = '';
+      document.getElementById('savingsSplitPayment').checked = false;
+      document.getElementById('savingsSecondDayGroup').style.display = 'none';
+      updateSavingsPaymentMethod();
+      
+      renderSavingsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function addDebt() {
+      const name = document.getElementById('debtName').value;
+      const balance = document.getElementById('debtBalance').value;
+      const rate = document.getElementById('debtRate').value;
+      const payment = document.getElementById('debtPayment').value;
+      const paymentMethod = document.getElementById('debtPaymentMethod').value;
+      const extraPayment = document.getElementById('debtExtraPayment').value || 0;
+      
+      if (!name || !balance || !rate || !payment) {
+        alert('Please fill in all required fields');
+        return;
+      }
+      
+      let debtData = {
+        name, 
+        balance, 
+        rate, 
+        payment,
+        paymentMethod: paymentMethod,
+        extraPayment
+      };
+      
+      if (paymentMethod === 'frequency') {
+        const frequency = document.getElementById('debtFrequency').value;
+        const freqDay = document.getElementById('debtFreqDay').value;
+        const firstDate = document.getElementById('debtFreqFirstDate').value;
+        
+        if (!firstDate) {
+          alert('Please select the first payment date');
+          return;
+        }
+        
+        if ((frequency === 'weekly' || frequency === 'monthly' || frequency === 'quarterly') && !freqDay) {
+          alert('Please enter the day');
+          return;
+        }
+        
+        debtData.frequency = frequency;
+        debtData.day = freqDay ? parseInt(freqDay) : null;
+        debtData.firstDate = firstDate;
+      } else {
+        const paymentDay = document.getElementById('debtPaymentDay').value;
+        const isSplit = document.getElementById('debtSplitPayment').checked;
+        const paymentDay2 = document.getElementById('debtPaymentDay2').value;
+        
+        if (!paymentDay) {
+          alert('Please enter the payment day');
+          return;
+        }
+        
+        if (isSplit && !paymentDay2) {
+          alert('Please enter the second payment day');
+          return;
+        }
+        
+        debtData.paymentDay = parseInt(paymentDay);
+        debtData.isSplit = isSplit;
+        debtData.paymentDay2 = isSplit ? parseInt(paymentDay2) : null;
+      }
+      
+      const totalPayment = parseFloat(payment) + parseFloat(extraPayment);
+      debtData.months = calculatePayoffMonths(parseFloat(balance), parseFloat(rate), totalPayment);
+      
+      data.debts.push(debtData);
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Clear form
+      document.getElementById('debtName').value = '';
+      document.getElementById('debtBalance').value = '';
+      document.getElementById('debtRate').value = '';
+      document.getElementById('debtPayment').value = '';
+      document.getElementById('debtPaymentMethod').value = 'frequency';
+      document.getElementById('debtFrequency').value = 'weekly';
+      document.getElementById('debtFreqDay').value = '';
+      document.getElementById('debtFreqFirstDate').value = '';
+      document.getElementById('debtPaymentDay').value = '';
+      document.getElementById('debtPaymentDay2').value = '';
+      document.getElementById('debtSplitPayment').checked = false;
+      document.getElementById('debtSecondPaymentDayGroup').style.display = 'none';
+      document.getElementById('debtExtraPayment').value = '';
+      updateDebtPaymentMethod();
+      
+      renderDebtsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function calculatePayoffMonths(balance, rate, payment) {
+      const monthlyRate = rate / 100 / 12;
+      let remaining = balance;
+      let months = 0;
+      
+      while (remaining > 0 && months < 600) {
+        const interest = remaining * monthlyRate;
+        const principal = payment - interest;
+        if (principal <= 0) return 'N/A';
+        remaining -= principal;
+        months++;
+      }
+      
+      return months;
+    }
+
+    function deleteBill(index) {
+      console.log('deleteBill called with index:', index);
+      if (confirm('Delete this bill?')) {
+        try {
+          data.bills.splice(index, 1);
+          localStorage.setItem('budgetData', JSON.stringify(data));
+          renderBillsList();
+          renderCalendar();
+          renderSummary();
+          console.log('Bill deleted successfully');
+        } catch (error) {
+          console.error('Error deleting bill:', error);
+          alert('Error deleting bill: ' + error.message);
+        }
+      }
+    }
+
+    function deleteSavings(index) {
+      console.log('deleteSavings called with index:', index);
+      if (confirm('Delete this deduction?')) {
+        try {
+          data.savings.splice(index, 1);
+          localStorage.setItem('budgetData', JSON.stringify(data));
+          renderSavingsList();
+          renderCalendar();
+          renderSummary();
+          console.log('Deduction deleted successfully');
+        } catch (error) {
+          console.error('Error deleting deduction:', error);
+          alert('Error deleting deduction: ' + error.message);
+        }
+      }
+    }
+
+    function deleteDebt(index) {
+      console.log('deleteDebt called with index:', index);
+      if (confirm('Delete this debt?')) {
+        try {
+          data.debts.splice(index, 1);
+          localStorage.setItem('budgetData', JSON.stringify(data));
+          renderDebtsList();
+          renderCalendar();
+          renderSummary();
+          console.log('Debt deleted successfully');
+        } catch (error) {
+          console.error('Error deleting debt:', error);
+          alert('Error deleting debt: ' + error.message);
+        }
+      }
+    }
+
+    function renderBillsList() {
+      const list = document.getElementById('billsList');
+      if (data.bills.length === 0) {
+        list.innerHTML = '<p style="color: #86868b; text-align: center; padding: 20px;">No bills added yet</p>';
+        return;
+      }
+      
+      list.innerHTML = data.bills.map((bill, i) => {
+        let freqText = bill.frequency === 'quarterly' ? 'every 3 months' : bill.frequency;
+        return `
+          <div class="item">
+            <div style="flex: 1;">
+              <div class="item-name">${bill.name}</div>
+              <div style="font-size: 12px; color: #86868b;">$${bill.amount} - Due day ${bill.dueDay} (${freqText})</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="editBill(${i})" style="background: #007aff; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Edit</button>
+              <button class="delete-btn" onclick="deleteBill(${i})">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function editBill(index) {
+      const bill = data.bills[index];
+      document.getElementById('billName').value = bill.name;
+      document.getElementById('billAmount').value = bill.amount;
+      document.getElementById('billFrequency').value = bill.frequency;
+      document.getElementById('billDueDay').value = bill.dueDay;
+      if (bill.firstDate) {
+        document.getElementById('billFirstDate').value = bill.firstDate;
+      }
+      updateBillDueDayLabel();
+      
+      // Store editing index
+      window.editingBillIndex = index;
+      
+      // Change button text
+      const addButton = document.querySelector('#bills-modal .btn-success');
+      addButton.textContent = 'Update Bill';
+      addButton.onclick = function() { updateBill(); };
+    }
+
+    function updateBill() {
+      const index = window.editingBillIndex;
+      const name = document.getElementById('billName').value;
+      const amount = document.getElementById('billAmount').value;
+      const frequency = document.getElementById('billFrequency').value;
+      const dueDay = document.getElementById('billDueDay').value;
+      const firstDate = document.getElementById('billFirstDate').value;
+      
+      if (!name || !amount || !dueDay) {
+        alert('Please fill in all required fields');
+        return;
+      }
+      
+      if (frequency === 'quarterly' && !firstDate) {
+        alert('Please select the first bill date for quarterly bills');
+        return;
+      }
+      
+      data.bills[index] = { 
+        name, 
+        amount, 
+        frequency, 
+        dueDay: parseInt(dueDay),
+        firstDate: frequency === 'quarterly' ? firstDate : null
+      };
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Reset form
+      document.getElementById('billName').value = '';
+      document.getElementById('billAmount').value = '';
+      document.getElementById('billDueDay').value = '';
+      document.getElementById('billFirstDate').value = '';
+      
+      window.editingBillIndex = null;
+      const addButton = document.querySelector('#bills-modal .btn-success');
+      addButton.textContent = 'Add Bill';
+      addButton.onclick = function() { addBill(); };
+      
+      renderBillsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function renderSavingsList() {
+      const list = document.getElementById('savingsList');
+      if (data.savings.length === 0) {
+        list.innerHTML = '<p style="color: #86868b; text-align: center; padding: 20px;">No deductions added yet</p>';
+        return;
+      }
+      
+      list.innerHTML = data.savings.map((saving, i) => {
+        const paymentMethod = saving.paymentMethod || 'frequency';
+        let freqText = '';
+        
+        if (paymentMethod === 'frequency') {
+          const freq = saving.frequency || 'everyPaycheck';
+          if (freq === 'everyPaycheck') freqText = 'per paycheck';
+          else if (freq === 'weekly') freqText = 'weekly';
+          else if (freq === 'biweekly') freqText = 'bi-weekly';
+          else if (freq === 'monthly') freqText = `monthly on day ${saving.day}`;
+          else if (freq === 'quarterly') freqText = `quarterly on day ${saving.day}`;
+        } else {
+          freqText = saving.isSplit 
+            ? `split: day ${saving.day} & ${saving.day2}` 
+            : `monthly on day ${saving.day}`;
+        }
+        
+        return `
+          <div class="item">
+            <div style="flex: 1;">
+              <div class="item-name">${saving.name}</div>
+              <div style="font-size: 12px; color: #86868b;">$${saving.amount} - ${freqText}</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="editSavings(${i})" style="background: #007aff; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Edit</button>
+              <button class="delete-btn" onclick="deleteSavings(${i})">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function editSavings(index) {
+      const saving = data.savings[index];
+      const paymentMethod = saving.paymentMethod || 'frequency';
+      
+      document.getElementById('savingsName').value = saving.name;
+      document.getElementById('savingsAmount').value = saving.amount;
+      document.getElementById('savingsPaymentMethod').value = paymentMethod;
+      
+      if (paymentMethod === 'frequency') {
+        document.getElementById('savingsFrequency').value = saving.frequency || 'everyPaycheck';
+        if (saving.day) document.getElementById('savingsFreqDay').value = saving.day;
+        if (saving.firstDate) document.getElementById('savingsFreqFirstDate').value = saving.firstDate;
+      } else {
+        if (saving.day) document.getElementById('savingsDay').value = saving.day;
+        if (saving.isSplit) {
+          document.getElementById('savingsSplitPayment').checked = true;
+          document.getElementById('savingsDay2').value = saving.day2;
+        }
+      }
+      
+      updateSavingsPaymentMethod();
+      
+      window.editingSavingsIndex = index;
+      const addButton = document.querySelector('#savings-modal .btn-success');
+      addButton.textContent = 'Update Deduction';
+      addButton.onclick = function() { updateSavings(); };
+    }
+
+    function updateSavings() {
+      const index = window.editingSavingsIndex;
+      const name = document.getElementById('savingsName').value;
+      const amount = document.getElementById('savingsAmount').value;
+      const paymentMethod = document.getElementById('savingsPaymentMethod').value;
+      
+      if (!name || !amount) {
+        alert('Please fill in name and amount');
+        return;
+      }
+      
+      let savingsData = { name, amount, paymentMethod };
+      
+      if (paymentMethod === 'frequency') {
+        const frequency = document.getElementById('savingsFrequency').value;
+        const freqDay = document.getElementById('savingsFreqDay').value;
+        const firstDate = document.getElementById('savingsFreqFirstDate').value;
+        
+        savingsData.frequency = frequency;
+        savingsData.day = freqDay ? parseInt(freqDay) : null;
+        savingsData.firstDate = firstDate || null;
+      } else {
+        const day = document.getElementById('savingsDay').value;
+        const isSplit = document.getElementById('savingsSplitPayment').checked;
+        const day2 = document.getElementById('savingsDay2').value;
+        
+        if (!day) {
+          alert('Please enter the deduction day');
+          return;
+        }
+        
+        savingsData.day = parseInt(day);
+        savingsData.isSplit = isSplit;
+        savingsData.day2 = isSplit ? parseInt(day2) : null;
+      }
+      
+      data.savings[index] = savingsData;
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Reset form
+      document.getElementById('savingsName').value = '';
+      document.getElementById('savingsAmount').value = '';
+      document.getElementById('savingsFreqDay').value = '';
+      document.getElementById('savingsFreqFirstDate').value = '';
+      document.getElementById('savingsDay').value = '';
+      document.getElementById('savingsDay2').value = '';
+      document.getElementById('savingsSplitPayment').checked = false;
+      
+      window.editingSavingsIndex = null;
+      const addButton = document.querySelector('#savings-modal .btn-success');
+      addButton.textContent = 'Add Deduction';
+      addButton.onclick = function() { addSavings(); };
+      
+      renderSavingsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function renderDebtsList() {
+      const list = document.getElementById('debtsList');
+      if (data.debts.length === 0) {
+        list.innerHTML = '<p style="color: #86868b; text-align: center; padding: 20px;">No debts added yet</p>';
+        return;
+      }
+      
+      list.innerHTML = data.debts.map((debt, i) => {
+        const totalPayment = parseFloat(debt.payment) + parseFloat(debt.extraPayment || 0);
+        const paymentMethod = debt.paymentMethod || 'date';
+        
+        let paymentInfo = '';
+        if (paymentMethod === 'frequency') {
+          const freq = debt.frequency;
+          if (freq === 'weekly') paymentInfo = `Weekly: $${debt.payment}`;
+          else if (freq === 'biweekly') paymentInfo = `Bi-weekly: $${debt.payment}`;
+          else if (freq === 'monthly') paymentInfo = `Monthly on day ${debt.day}: $${debt.payment}`;
+          else if (freq === 'quarterly') paymentInfo = `Quarterly on day ${debt.day}: $${debt.payment}`;
+        } else {
+          paymentInfo = debt.isSplit 
+            ? `Split: $${(parseFloat(debt.payment) / 2).toFixed(2)} on day ${debt.paymentDay} & day ${debt.paymentDay2}`
+            : `Monthly on day ${debt.paymentDay}: $${totalPayment}`;
+        }
+        
+        return `
+          <div class="item">
+            <div style="flex: 1;">
+              <div class="item-name">${debt.name}</div>
+              <div style="font-size: 12px; color: #86868b;">Balance: $${debt.balance} | Rate: ${debt.rate}%</div>
+              <div style="font-size: 12px; color: #86868b;">${paymentInfo}</div>
+              <div style="font-size: 12px; color: #007aff; margin-top: 4px;">Payoff: ${debt.months === 'N/A' ? 'N/A' : debt.months + ' months'}</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="editDebt(${i})" style="background: #007aff; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Edit</button>
+              <button class="delete-btn" onclick="deleteDebt(${i})">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function editDebt(index) {
+      const debt = data.debts[index];
+      const paymentMethod = debt.paymentMethod || 'date';
+      
+      document.getElementById('debtName').value = debt.name;
+      document.getElementById('debtBalance').value = debt.balance;
+      document.getElementById('debtRate').value = debt.rate;
+      document.getElementById('debtPayment').value = debt.payment;
+      document.getElementById('debtExtraPayment').value = debt.extraPayment || '';
+      document.getElementById('debtPaymentMethod').value = paymentMethod;
+      
+      if (paymentMethod === 'frequency') {
+        document.getElementById('debtFrequency').value = debt.frequency;
+        if (debt.day) document.getElementById('debtFreqDay').value = debt.day;
+        if (debt.firstDate) document.getElementById('debtFreqFirstDate').value = debt.firstDate;
+      } else {
+        if (debt.paymentDay) document.getElementById('debtPaymentDay').value = debt.paymentDay;
+        if (debt.isSplit) {
+          document.getElementById('debtSplitPayment').checked = true;
+          document.getElementById('debtPaymentDay2').value = debt.paymentDay2;
+        }
+      }
+      
+      updateDebtPaymentMethod();
+      
+      window.editingDebtIndex = index;
+      const addButton = document.querySelector('#debts-modal .btn-success');
+      addButton.textContent = 'Update Debt';
+      addButton.onclick = function() { updateDebt(); };
+    }
+
+    function updateDebt() {
+      const index = window.editingDebtIndex;
+      const name = document.getElementById('debtName').value;
+      const balance = document.getElementById('debtBalance').value;
+      const rate = document.getElementById('debtRate').value;
+      const payment = document.getElementById('debtPayment').value;
+      const paymentMethod = document.getElementById('debtPaymentMethod').value;
+      const extraPayment = document.getElementById('debtExtraPayment').value || 0;
+      
+      if (!name || !balance || !rate || !payment) {
+        alert('Please fill in all required fields');
+        return;
+      }
+      
+      let debtData = { name, balance, rate, payment, paymentMethod, extraPayment };
+      
+      if (paymentMethod === 'frequency') {
+        const frequency = document.getElementById('debtFrequency').value;
+        const freqDay = document.getElementById('debtFreqDay').value;
+        const firstDate = document.getElementById('debtFreqFirstDate').value;
+        
+        if (!firstDate) {
+          alert('Please select the first payment date');
+          return;
+        }
+        
+        debtData.frequency = frequency;
+        debtData.day = freqDay ? parseInt(freqDay) : null;
+        debtData.firstDate = firstDate;
+      } else {
+        const paymentDay = document.getElementById('debtPaymentDay').value;
+        const isSplit = document.getElementById('debtSplitPayment').checked;
+        const paymentDay2 = document.getElementById('debtPaymentDay2').value;
+        
+        if (!paymentDay) {
+          alert('Please enter the payment day');
+          return;
+        }
+        
+        debtData.paymentDay = parseInt(paymentDay);
+        debtData.isSplit = isSplit;
+        debtData.paymentDay2 = isSplit ? parseInt(paymentDay2) : null;
+      }
+      
+      const totalPayment = parseFloat(payment) + parseFloat(extraPayment);
+      debtData.months = calculatePayoffMonths(parseFloat(balance), parseFloat(rate), totalPayment);
+      
+      data.debts[index] = debtData;
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Reset form
+      document.getElementById('debtName').value = '';
+      document.getElementById('debtBalance').value = '';
+      document.getElementById('debtRate').value = '';
+      document.getElementById('debtPayment').value = '';
+      document.getElementById('debtExtraPayment').value = '';
+      document.getElementById('debtFreqDay').value = '';
+      document.getElementById('debtFreqFirstDate').value = '';
+      document.getElementById('debtPaymentDay').value = '';
+      document.getElementById('debtPaymentDay2').value = '';
+      document.getElementById('debtSplitPayment').checked = false;
+      
+      window.editingDebtIndex = null;
+      const addButton = document.querySelector('#debts-modal .btn-success');
+      addButton.textContent = 'Add Debt';
+      addButton.onclick = function() { addDebt(); };
+      
+      renderDebtsList();
+      renderCalendar();
+      renderSummary();
+    }
+
+    function renderSummary() {
+      const summary = document.getElementById('summary');
+      
+      // Calculate total monthly deductions
+      let monthlyDeductions = 0;
+      data.savings.forEach(saving => {
+        const amount = parseFloat(saving.amount) || 0;
+        if (saving.frequency === 'everyPaycheck') {
+          // Estimate based on pay frequency
+          if (data.income.frequency === 'weekly') monthlyDeductions += amount * 4;
+          else if (data.income.frequency === 'biweekly') monthlyDeductions += amount * 2;
+          else if (data.income.frequency === 'monthly') monthlyDeductions += amount;
+        } else if (saving.frequency === 'weekly') {
+          monthlyDeductions += amount * 4;
+        } else if (saving.frequency === 'biweekly') {
+          monthlyDeductions += amount * 2;
+        } else if (saving.frequency === 'monthly') {
+          monthlyDeductions += amount;
+        }
+      });
+      
+      summary.innerHTML = `
+        <div class="summary-card">
+          <h3>Take Home Pay</h3>
+          <div class="value">$${data.income.amount || '0'}</div>
+          <p style="font-size: 12px; color: #86868b; margin-top: 4px;">${data.income.frequency || 'Not set'}</p>
+        </div>
+        <div class="summary-card">
+          <h3>Monthly Bills</h3>
+          <div class="value">$${data.bills.reduce((s,b) => s + parseFloat(b.amount || 0), 0).toFixed(2)}</div>
+          <p style="font-size: 12px; color: #86868b; margin-top: 4px;">${data.bills.length} bills</p>
+        </div>
+        <div class="summary-card">
+          <h3>Monthly Deductions</h3>
+          <div class="value">$${monthlyDeductions.toFixed(2)}</div>
+          <p style="font-size: 12px; color: #86868b; margin-top: 4px;">${data.savings.length} deductions</p>
+        </div>
+        <div class="summary-card">
+          <h3>Total Debt</h3>
+          <div class="value">$${data.debts.reduce((s,d) => s + parseFloat(d.balance || 0), 0).toFixed(2)}</div>
+          <p style="font-size: 12px; color: #86868b; margin-top: 4px;">${data.debts.length} debts</p>
+        </div>
+      `;
+    }
+
+    function getPayDates(year, month) {
+      if (!data.income.firstDate) return [];
+      const payDates = [];
+      
+      // Parse the date string properly to avoid timezone issues
+      const dateParts = data.income.firstDate.split('-');
+      let current = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+      
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+      
+      // Go back to find the first occurrence before or in this month
+      while (current > monthStart) {
+        if (data.income.frequency === 'weekly') current.setDate(current.getDate() - 7);
+        else if (data.income.frequency === 'biweekly') current.setDate(current.getDate() - 14);
+        else if (data.income.frequency === 'monthly') current.setMonth(current.getMonth() - 1);
+      }
+      
+      // Now move forward to collect all dates in the month
+      while (current <= monthEnd) {
+        if (current >= monthStart && current <= monthEnd) {
+          payDates.push(new Date(current));
+        }
+        if (data.income.frequency === 'weekly') current.setDate(current.getDate() + 7);
+        else if (data.income.frequency === 'biweekly') current.setDate(current.getDate() + 14);
+        else if (data.income.frequency === 'monthly') current.setMonth(current.getMonth() + 1);
+      }
+      return payDates;
+    }
+
+    function getBillsForDay(day, month, year) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      return data.bills.filter(bill => {
+        if (bill.frequency === 'monthly') {
+          return bill.dueDay === day;
+        } else if (bill.frequency === 'weekly') {
+          const date = new Date(year, month, day);
+          return date.getDay() === bill.dueDay;
+        } else if (bill.frequency === 'quarterly' && bill.firstDate) {
+          const currentDate = new Date(year, month, day);
+          let billDate = new Date(bill.firstDate);
+          
+          // Check if this date matches a quarterly occurrence
+          while (billDate <= currentDate) {
+            if (billDate.getFullYear() === year && 
+                billDate.getMonth() === month && 
+                billDate.getDate() === day) {
+              return true;
+            }
+            billDate.setMonth(billDate.setMonth() + 3);
+          }
+        }
+        return false;
+      }).map(bill => {
+        // Check for amount override
+        const override = data.amountOverrides && data.amountOverrides.find(o =>
+          o.type === 'bill' && o.itemName === bill.name && o.date === dateStr
+        );
+        
+        return {
+          ...bill,
+          amount: override ? override.amount : bill.amount
+        };
+      });
+    }
+
+    function getDebtsForDay(day, month, year) {
+      const debtsForDay = [];
+      const currentDate = new Date(year, month, day);
+      
+      data.debts.forEach(debt => {
+        const paymentMethod = debt.paymentMethod || 'date'; // Default to date for old data
+        const basePayment = parseFloat(debt.payment) || 0;
+        
+        // Check for payment exceptions first
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const hasException = data.paymentExceptions && data.paymentExceptions.some(ex => 
+          ex.type === 'debt' && ex.itemName === debt.name && ex.originalDate === dateStr
+        );
+        
+        if (hasException) {
+          return; // Skip this debt on this day, it was moved
+        }
+        
+        // Check if this debt was moved TO this date
+        const movedHere = data.paymentExceptions && data.paymentExceptions.find(ex =>
+          ex.type === 'debt' && ex.itemName === debt.name && ex.newDate === dateStr
+        );
+        
+        if (movedHere) {
+          debtsForDay.push({
+            ...debt,
+            displayAmount: debt.isSplit ? (basePayment / 2).toFixed(2) : basePayment.toFixed(2)
+          });
+          return;
+        }
+        
+        if (paymentMethod === 'date') {
+          // Date-based method (specific day(s) of month)
+          if (debt.paymentDay === day) {
+            debtsForDay.push({
+              ...debt,
+              displayAmount: debt.isSplit ? (basePayment / 2).toFixed(2) : basePayment.toFixed(2)
+            });
+          }
+          if (debt.isSplit && debt.paymentDay2 === day) {
+            debtsForDay.push({
+              ...debt,
+              displayAmount: (basePayment / 2).toFixed(2)
+            });
+          }
+        } else if (paymentMethod === 'frequency' && debt.firstDate) {
+          // Frequency-based method
+          const frequency = debt.frequency;
+          const dateParts = debt.firstDate.split('-');
+          const firstDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+          
+          if (frequency === 'weekly') {
+            const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
+            const matchesInterval = daysDiff >= 0 && daysDiff % 7 === 0;
+            const matchesDayOfWeek = currentDate.getDay() === firstDate.getDay();
+            
+            if (debt.name.includes('Service Finance')) {
+              console.log(`    Weekly check for ${debt.name}:`);
+              console.log(`      currentDate: ${currentDate.toDateString()}, firstDate: ${firstDate.toDateString()}`);
+              console.log(`      daysDiff: ${daysDiff}, daysDiff % 7: ${daysDiff % 7}`);
+              console.log(`      currentDate.getDay(): ${currentDate.getDay()}, firstDate.getDay(): ${firstDate.getDay()}`);
+              console.log(`      matchesInterval: ${matchesInterval}, matchesDayOfWeek: ${matchesDayOfWeek}`);
+            }
+            
+            if (matchesInterval && matchesDayOfWeek) {
+              debtsForDay.push({ ...debt, displayAmount: basePayment.toFixed(2) });
+            }
+          } else if (frequency === 'biweekly') {
+            const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
+            if (daysDiff >= 0 && daysDiff % 14 === 0) {
+              debtsForDay.push({ ...debt, displayAmount: basePayment.toFixed(2) });
+            }
+          } else if (frequency === 'monthly') {
+            // Monthly frequency - payment on specific day of each month
+            const paymentDay = debt.day || firstDate.getDate();
+            if (day === paymentDay && currentDate >= firstDate) {
+              debtsForDay.push({ ...debt, displayAmount: basePayment.toFixed(2) });
+            }
+          } else if (frequency === 'quarterly') {
+            // Check if this date matches a quarterly occurrence
+            let checkDate = new Date(firstDate);
+            while (checkDate <= currentDate) {
+              if (checkDate.getFullYear() === year && 
+                  checkDate.getMonth() === month && 
+                  checkDate.getDate() === day) {
+                debtsForDay.push({ ...debt, displayAmount: basePayment.toFixed(2) });
+                break;
+              }
+              checkDate.setMonth(checkDate.getMonth() + 3);
+            }
+          }
+        }
+        
+        // Handle old data format (frequency without paymentMethod)
+        if (!debt.paymentMethod && debt.frequency) {
+          const frequency = debt.frequency;
+          if (frequency === 'monthly' && debt.paymentDay === day) {
+            debtsForDay.push({
+              ...debt,
+              displayAmount: debt.isSplit ? (basePayment / 2).toFixed(2) : basePayment.toFixed(2)
+            });
+          }
+        }
+      });
+      
+      // Apply amount overrides to all debts
+      return debtsForDay.map(debt => {
+        const override = data.amountOverrides && data.amountOverrides.find(o =>
+          o.type === 'debt' && o.itemName === debt.name && o.date === dateStr
+        );
+        
+        return {
+          ...debt,
+          displayAmount: override ? override.amount.toFixed(2) : debt.displayAmount
+        };
+      });
+    }
+
+    function getSavingsForDay(day, month, year) {
+      const savingsForDay = [];
+      const currentDate = new Date(year, month, day);
+      
+      data.savings.forEach(saving => {
+        const paymentMethod = saving.paymentMethod || 'frequency'; // Default for old data
+        
+        if (paymentMethod === 'date') {
+          // Date-based method
+          if (saving.day === day) {
+            const displayAmount = saving.isSplit ? (parseFloat(saving.amount) / 2).toFixed(2) : saving.amount;
+            savingsForDay.push({ ...saving, displayAmount });
+          }
+          if (saving.isSplit && saving.day2 === day) {
+            savingsForDay.push({ ...saving, displayAmount: (parseFloat(saving.amount) / 2).toFixed(2) });
+          }
+        } else if (paymentMethod === 'frequency') {
+          // Frequency-based method
+          const frequency = saving.frequency;
+          
+          if (frequency === 'monthly' && saving.day === day) {
+            const displayAmount = saving.isSplit ? (parseFloat(saving.amount) / 2).toFixed(2) : saving.amount;
+            savingsForDay.push({ ...saving, displayAmount });
+          } else if (frequency === 'monthly' && saving.isSplit && saving.day2 === day) {
+            savingsForDay.push({ ...saving, displayAmount: (parseFloat(saving.amount) / 2).toFixed(2) });
+          } else if (frequency === 'weekly' && saving.firstDate) {
+            const dateParts = saving.firstDate.split('-');
+            const firstDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+            const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
+            if (daysDiff >= 0 && daysDiff % 7 === 0 && currentDate.getDay() === firstDate.getDay()) {
+              const displayAmount = saving.isSplit ? (parseFloat(saving.amount) / 2).toFixed(2) : saving.amount;
+              savingsForDay.push({ ...saving, displayAmount });
+            }
+          } else if (frequency === 'biweekly' && saving.firstDate) {
+            const dateParts = saving.firstDate.split('-');
+            const firstDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+            const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
+            if (daysDiff >= 0 && daysDiff % 14 === 0) {
+              const displayAmount = saving.isSplit ? (parseFloat(saving.amount) / 2).toFixed(2) : saving.amount;
+              savingsForDay.push({ ...saving, displayAmount });
+            }
+          } else if (frequency === 'quarterly' && saving.firstDate) {
+            const dateParts = saving.firstDate.split('-');
+            const firstDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+            let checkDate = new Date(firstDate);
+            while (checkDate <= currentDate) {
+              if (checkDate.getFullYear() === year && 
+                  checkDate.getMonth() === month && 
+                  checkDate.getDate() === day) {
+                savingsForDay.push({ ...saving, displayAmount: saving.amount });
+                break;
+              }
+              checkDate.setMonth(checkDate.getMonth() + 3);
+            }
+          }
+        }
+        
+        // Handle old data format (frequency without paymentMethod)
+        if (!saving.paymentMethod && saving.frequency) {
+          // Already handled in frequency branch above
+        }
+      });
+      
+      // Apply amount overrides to all savings
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      return savingsForDay.map(saving => {
+        const override = data.amountOverrides && data.amountOverrides.find(o =>
+          o.type === 'saving' && o.itemName === saving.name && o.date === dateStr
+        );
+        
+        return {
+          ...saving,
+          displayAmount: override ? override.amount.toFixed(2) : saving.displayAmount
+        };
+      });
+    }
+
+    function calculatePayPeriodBalance(payDate) {
+      let balance = parseFloat(data.income.amount) || 0;
+      
+      // Subtract deductions that happen on payday
+      data.savings.forEach(saving => {
+        if (saving.frequency === 'everyPaycheck') {
+          balance -= parseFloat(saving.amount) || 0;
+        }
+      });
+      
+      // Find next pay date
+      const payDates = getPayDates(payDate.getFullYear(), payDate.getMonth());
+      const currentPayIndex = payDates.findIndex(pd => pd.getTime() === payDate.getTime());
+      
+      let nextPayDate;
+      if (currentPayIndex < payDates.length - 1) {
+        nextPayDate = payDates[currentPayIndex + 1];
+      } else {
+        // Get first pay date of next month
+        const nextMonth = new Date(payDate);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const nextMonthPayDates = getPayDates(nextMonth.getFullYear(), nextMonth.getMonth());
+        nextPayDate = nextMonthPayDates.length > 0 ? nextMonthPayDates[0] : new Date(payDate.getFullYear(), payDate.getMonth() + 1, payDate.getDate());
+      }
+      
+      // Subtract bills, debts, and savings due between this pay date and next
+      let currentDate = new Date(payDate);
+      while (currentDate < nextPayDate) {
+        const day = currentDate.getDate();
+        const month = currentDate.getMonth();
+        const year = currentDate.getFullYear();
+        
+        const bills = getBillsForDay(day, month, year);
+        bills.forEach(bill => {
+          balance -= parseFloat(bill.amount) || 0;
+        });
+        
+        const debts = getDebtsForDay(day, month, year);
+        debts.forEach(debt => {
+          balance -= parseFloat(debt.displayAmount);
+        });
+        
+        const savings = getSavingsForDay(day, month, year);
+        savings.forEach(saving => {
+          balance -= parseFloat(saving.displayAmount);
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      return balance;
+    }
+
+    function renderCalendar() {
+      const year = currentYear;
+      const month = currentMonth;
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDay = firstDay.getDay();
+      const daysInMonth = lastDay.getDate();
+      
+      const payDates = getPayDates(year, month);
+      
+      let html = '';
+      
+      // Previous month days
+      const prevMonthDays = new Date(year, month, 0).getDate();
+      for (let i = startDay - 1; i >= 0; i--) {
+        html += `<div class="day" style="opacity: 0.3;"><div class="day-number">${prevMonthDays - i}</div></div>`;
+      }
+      
+      // Current month days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const isPayday = payDates.some(pd => pd.getDate() === day);
+        const bills = getBillsForDay(day, month, year);
+        const debts = getDebtsForDay(day, month, year);
+        const savings = getSavingsForDay(day, month, year);
+        
+        html += `<div class="day">
+          <div class="day-number">${day}</div>
+          ${isPayday ? `<div class="event payday">💰 Payday $${data.income.amount || '0'}<br><span style="font-size: 10px;">$${calculatePayPeriodBalance(date).toFixed(0)} left</span></div>` : ''}
+          ${bills.map((bill, idx) => `
+            <div class="event" style="cursor: pointer; position: relative; padding-right: 50px;" title="Click to move or edit">
+              <span onclick="movePayment('bill', ${bills.indexOf(bill)}, '${bill.name.replace(/'/g, "\\'")}', ${year}, ${month}, ${day})">
+                📄 ${bill.name} $${bill.amount}
+              </span>
+              <button onclick="event.stopPropagation(); editPaymentAmount('bill', '${bill.name.replace(/'/g, "\\'")}', ${bill.amount}, ${year}, ${month}, ${day})" 
+                      style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: #007aff; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 10px; cursor: pointer;">
+                ✏️
+              </button>
+            </div>
+          `).join('')}
+          ${debts.map((debt, idx) => `
+            <div class="event debt" style="cursor: pointer; position: relative; padding-right: 50px;" title="Click to move or edit">
+              <span onclick="movePayment('debt', ${debts.indexOf(debt)}, '${debt.name.replace(/'/g, "\\'")}', ${year}, ${month}, ${day})">
+                🚗 ${debt.name} $${debt.displayAmount || debt.payment}
+              </span>
+              <button onclick="event.stopPropagation(); editPaymentAmount('debt', '${debt.name.replace(/'/g, "\\'")}', ${debt.displayAmount || debt.payment}, ${year}, ${month}, ${day})" 
+                      style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: #007aff; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 10px; cursor: pointer;">
+                ✏️
+              </button>
+            </div>
+          `).join('')}
+          ${savings.map((saving, idx) => `
+            <div class="event" style="background: #fef3c7; color: #d97706; cursor: pointer; position: relative; padding-right: 50px;" title="Click to move or edit">
+              <span onclick="movePayment('saving', ${savings.indexOf(saving)}, '${saving.name.replace(/'/g, "\\'")}', ${year}, ${month}, ${day})">
+                🏦 ${saving.name} $${saving.displayAmount || saving.amount}
+              </span>
+              <button onclick="event.stopPropagation(); editPaymentAmount('saving', '${saving.name.replace(/'/g, "\\'")}', ${saving.displayAmount || saving.amount}, ${year}, ${month}, ${day})" 
+                      style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: #007aff; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 10px; cursor: pointer;">
+                ✏️
+              </button>
+            </div>
+          `).join('')}
+        </div>`;
+      }
+      
+      // Next month days
+      const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
+      const remainingDays = totalCells - (startDay + daysInMonth);
+      for (let i = 1; i <= remainingDays; i++) {
+        html += `<div class="day" style="opacity: 0.3;"><div class="day-number">${i}</div></div>`;
+      }
+      
+      document.getElementById('calendar').innerHTML = html;
+    }
+
+    // Initialize
+    renderSummary();
+    renderCalendar();
+    updateMonthYearDisplay();
+    
+    function movePayment(type, itemIndex, itemName, fromYear, fromMonth, fromDay) {
+      const fromDate = `${fromYear}-${String(fromMonth + 1).padStart(2, '0')}-${String(fromDay).padStart(2, '0')}`;
+      
+      const newDay = prompt(`Move "${itemName}" from ${fromMonth + 1}/${fromDay} to which day of the month?`, fromDay);
+      
+      if (newDay === null) return; // User cancelled
+      
+      const newDayNum = parseInt(newDay);
+      if (isNaN(newDayNum) || newDayNum < 1 || newDayNum > 31) {
+        alert('Please enter a valid day (1-31)');
+        return;
+      }
+      
+      const toDate = `${fromYear}-${String(fromMonth + 1).padStart(2, '0')}-${String(newDayNum).padStart(2, '0')}`;
+      
+      // Initialize paymentExceptions if it doesn't exist
+      if (!data.paymentExceptions) {
+        data.paymentExceptions = [];
+      }
+      
+      // Remove any existing exception for this payment on this date
+      data.paymentExceptions = data.paymentExceptions.filter(ex => 
+        !(ex.type === type && ex.itemName === itemName && ex.originalDate === fromDate)
+      );
+      
+      // Add new exception
+      data.paymentExceptions.push({
+        type: type,
+        itemName: itemName,
+        originalDate: fromDate,
+        newDate: toDate
+      });
+      
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      renderCalendar();
+      
+      alert(`Moved "${itemName}" from ${fromMonth + 1}/${fromDay} to ${fromMonth + 1}/${newDayNum}. This only affects this specific payment, not future recurring payments.`);
+    }
+    
+    function editPaymentAmount(type, itemName, currentAmount, year, month, day) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const displayDate = `${month + 1}/${day}/${year}`;
+      
+      const newAmount = prompt(
+        `Edit amount for "${itemName}" on ${displayDate}:\n\n` +
+        `Current amount: $${currentAmount}\n` +
+        `Enter new amount (or leave blank to use default):`,
+        currentAmount
+      );
+      
+      if (newAmount === null) return; // User cancelled
+      
+      // Initialize amountOverrides if it doesn't exist
+      if (!data.amountOverrides) {
+        data.amountOverrides = [];
+      }
+      
+      // Remove any existing override for this payment on this date
+      data.amountOverrides = data.amountOverrides.filter(override => 
+        !(override.type === type && override.itemName === itemName && override.date === dateStr)
+      );
+      
+      if (newAmount === '' || newAmount === currentAmount.toString()) {
+        // Remove override if blank or same as default
+        localStorage.setItem('budgetData', JSON.stringify(data));
+        renderCalendar();
+        alert(`Amount reset to default for "${itemName}" on ${displayDate}`);
+        return;
+      }
+      
+      const parsedAmount = parseFloat(newAmount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+      }
+      
+      // Add new override
+      data.amountOverrides.push({
+        type: type,
+        itemName: itemName,
+        date: dateStr,
+        amount: parsedAmount
+      });
+      
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      renderCalendar();
+      
+      alert(`Updated "${itemName}" on ${displayDate} to $${parsedAmount.toFixed(2)}\n\nNote: This only affects this specific payment. Future payments will use the default amount.`);
+    }
+    
+    // Bank Statement Analysis Functions
+    let analyzedTransactions = [];
+    
+    async function analyzeStatements() {
+      const fileInput = document.getElementById('statementFiles');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please upload at least one CSV or PDF file');
+        return;
+      }
+      
+      const debugMode = document.getElementById('debugMode').checked;
+      let debugText = '';
+      
+      analyzedTransactions = [];
+      let processingInfo = [];
+      
+      for (const file of fileInput.files) {
+        const fileName = file.name.toLowerCase();
+        let fileTransactions = [];
+        
+        if (fileName.endsWith('.csv')) {
+          const text = await file.text();
+          if (debugMode) {
+            debugText += `\n=== ${file.name} (CSV) ===\n`;
+            debugText += text.substring(0, 500) + (text.length > 500 ? '\n...(truncated)...' : '');
+            debugText += '\n\n';
+          }
+          fileTransactions = parseCSV(text);
+        } else if (fileName.endsWith('.pdf')) {
+          const result = await parsePDF(file);
+          fileTransactions = result.transactions || result;
+          
+          if (debugMode && result.extractedText) {
+            debugText += `\n=== ${file.name} (PDF) ===\n`;
+            debugText += result.extractedText.substring(0, 1000) + (result.extractedText.length > 1000 ? '\n...(truncated)...' : '');
+            debugText += '\n\n';
+          }
+        } else {
+          alert(`Unsupported file type: ${file.name}`);
+          continue;
+        }
+        
+        analyzedTransactions.push(...fileTransactions);
+        processingInfo.push(`${file.name}: ${fileTransactions.length} transactions found`);
+      }
+      
+      // Show debug output
+      if (debugMode) {
+        document.getElementById('debugOutput').style.display = 'block';
+        document.getElementById('debugText').textContent = debugText;
+      }
+      
+      if (analyzedTransactions.length === 0) {
+        let errorMsg = 'No transactions found in uploaded files.\n\nTips:\n- Make sure PDFs contain text (not scanned images)\n- CSV files should have Date, Description, and Amount columns\n- Try exporting statements in a different format';
+        
+        if (debugMode) {
+          errorMsg += '\n\n📝 Debug mode is enabled - check the debug output above to see what was extracted from your files.';
+        } else {
+          errorMsg += '\n\n💡 Enable "Debug Mode" checkbox to see what data is being extracted from your files.';
+        }
+        
+        alert(errorMsg);
+        return;
+      }
+      
+      // Show processing info
+      console.log('Files processed:');
+      processingInfo.forEach(info => console.log('  ' + info));
+      console.log(`Total transactions: ${analyzedTransactions.length}`);
+      
+      // Analyze transactions
+      // Apply saved category reassignments
+      analyzedTransactions.forEach(t => {
+        const savedCategory = data.categoryReassignments[t.description.toLowerCase()];
+        if (savedCategory) {
+          t.category = savedCategory;
+        }
+      });
+      
+      // Store globally for access by other functions
+      window.analyzedTransactions = analyzedTransactions;
+      
+      const categories = categorizeTransactions(analyzedTransactions);
+      const recurring = findRecurringPayments(analyzedTransactions);
+      const duplicates = findDuplicates(analyzedTransactions);
+      
+      // Display results
+      displayCategoryBreakdown(categories);
+      displayRecurringPayments(recurring);
+      displayDuplicates(duplicates);
+      
+      // Show summary at top
+      const analysisDiv = document.getElementById('statementAnalysis');
+      const summaryHTML = `
+        <div style="background: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div style="font-weight: 600; font-size: 16px; color: #1b5e20; margin-bottom: 8px;">✅ Analysis Complete</div>
+          <div style="font-size: 14px; color: #2e7d32;">
+            📁 ${fileInput.files.length} file(s) processed<br>
+            💳 ${analyzedTransactions.length} transactions found<br>
+            📊 ${Object.values(categories).filter(c => c.count > 0).length} categories with spending<br>
+            🔁 ${recurring.length} recurring payments detected<br>
+            ⚠️ ${duplicates.length} possible duplicates found
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <button onclick="showSpendingCharts()" style="flex: 1; background: #007aff; color: white; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+              📊 View Charts
+            </button>
+            <button onclick="exportToExcel()" style="flex: 1; background: #34c759; color: white; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+              📥 Export to Excel
+            </button>
+            <button onclick="exportToCSV()" style="flex: 1; background: #5856d6; color: white; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+              📥 Export to CSV
+            </button>
+          </div>
+          <div style="font-size: 12px; color: #558b2f; margin-top: 8px; font-style: italic;">
+            💡 Tip: Click any category below to see detailed transactions
+          </div>
+        </div>
+      `;
+      
+      analysisDiv.style.display = 'block';
+      analysisDiv.insertAdjacentHTML('afterbegin', summaryHTML);
+    }
+    
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
+      
+      // Parse first line as headers
+      const rawHeaders = lines[0].split(',');
+      const headers = rawHeaders.map(h => h.trim().toLowerCase().replace(/"/g, '').replace(/'/g, ''));
+      
+      console.log('CSV Headers found:', headers);
+      
+      // Find column indices with multiple possible names
+      let dateIdx = headers.findIndex(h => 
+        h.includes('date') || 
+        h.includes('posted') || 
+        h.includes('transaction date') ||
+        h.includes('trans date')
+      );
+      
+      let descIdx = headers.findIndex(h => 
+        h.includes('description') || 
+        h.includes('memo') || 
+        h.includes('name') ||
+        h.includes('merchant') ||
+        h.includes('details') ||
+        h.includes('transaction')
+      );
+      
+      let amountIdx = headers.findIndex(h => 
+        h.includes('amount') || 
+        h.includes('debit') || 
+        h.includes('withdrawal') ||
+        h.includes('charge') ||
+        h.includes('payment')
+      );
+      
+      // Alternative: look for credit/debit columns separately
+      let debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
+      let creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
+      
+      console.log(`Column indices - Date: ${dateIdx}, Description: ${descIdx}, Amount: ${amountIdx}, Debit: ${debitIdx}, Credit: ${creditIdx}`);
+      
+      if (dateIdx === -1 || descIdx === -1) {
+        console.error('Could not find required columns in CSV');
+        console.log('Available headers:', headers);
+        alert('Could not identify required columns in CSV.\n\nFound headers: ' + headers.join(', ') + '\n\nNeeded: Date and Description columns');
+        return [];
+      }
+      
+      const transactions = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        
+        // Handle quoted fields properly
+        const cols = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let char of lines[i]) {
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            cols.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        cols.push(current.trim());
+        
+        if (cols.length < Math.max(dateIdx, descIdx) + 1) continue;
+        
+        const date = cols[dateIdx].replace(/"/g, '');
+        const description = cols[descIdx].replace(/"/g, '');
+        
+        // Get amount - try main amount column first, then debit column
+        let amount = null;
+        
+        if (amountIdx !== -1 && cols[amountIdx]) {
+          amount = parseFloat(cols[amountIdx].replace(/"/g, '').replace(/[^0-9.-]/g, ''));
+        } else if (debitIdx !== -1 && cols[debitIdx]) {
+          const debitVal = cols[debitIdx].replace(/"/g, '').trim();
+          if (debitVal) {
+            amount = parseFloat(debitVal.replace(/[^0-9.-]/g, ''));
+          }
+        }
+        
+        if (!date || !description || amount === null || isNaN(amount)) continue;
+        
+        // Check if this is a transfer (skip all transfers)
+        const descLower = description.toLowerCase();
+        const isTransfer = descLower.includes('xfer') ||
+                          descLower.includes('transfer') ||
+                          descLower.includes('x-fer') ||
+                          descLower.includes('trnsfr') ||
+                          descLower.includes('tfr') ||
+                          descLower.includes('internet xfer') ||
+                          descLower.includes('online transfer') ||
+                          descLower.includes('mobile transfer') ||
+                          descLower.includes('acct transfer') ||
+                          descLower.includes('account transfer');
+        
+        if (isTransfer) {
+          console.log(`  ⇄ CSV Transfer skipped: ${description}`);
+          continue;  // Skip all transfers
+        }
+        
+        // Convert positive debits to expenses, skip if it's negative (credit/deposit)
+        const finalAmount = amount < 0 ? Math.abs(amount) : (amountIdx !== -1 || debitIdx !== -1 ? amount : null);
+        
+        if (finalAmount && finalAmount > 0) {
+          try {
+            const parsedDate = new Date(date);
+            if (!isNaN(parsedDate.getTime())) {
+              // Generate unique ID with fallback
+              let uniqueId;
+              try {
+                uniqueId = crypto.randomUUID();
+              } catch (e) {
+                uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              }
+              
+              transactions.push({
+                id: uniqueId,
+                date: parsedDate,
+                description: description,
+                amount: finalAmount
+              });
+            }
+          } catch (e) {
+            console.warn('Could not parse date:', date);
+          }
+        }
+      }
+      
+      console.log(`Parsed ${transactions.length} transactions from CSV`);
+      return transactions;
+    }
+    
+    async function parsePDF(file) {
+      try {
+        // Set worker source for PDF.js
+        if (typeof pdfjsLib !== 'undefined') {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullText = '';
+        
+        // Extract text from all pages
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          // Preserve line breaks by checking Y positions
+          let lastY = null;
+          let pageLines = [];
+          let currentLine = '';
+          
+          textContent.items.forEach(item => {
+            const y = item.transform[5]; // Y position
+            
+            // If Y position changed significantly, start new line
+            if (lastY !== null && Math.abs(y - lastY) > 2) {
+              if (currentLine.trim()) {
+                pageLines.push(currentLine.trim());
+              }
+              currentLine = item.str;
+            } else {
+              // Same line, add space if needed
+              if (currentLine && !currentLine.endsWith(' ') && !item.str.startsWith(' ')) {
+                currentLine += ' ';
+              }
+              currentLine += item.str;
+            }
+            
+            lastY = y;
+          });
+          
+          // Add last line
+          if (currentLine.trim()) {
+            pageLines.push(currentLine.trim());
+          }
+          
+          fullText += pageLines.join('\n') + '\n';
+        }
+        
+        console.log(`PDF ${file.name}: Extracted ${fullText.length} characters of text`);
+        
+        // Parse transactions from text
+        const transactions = parseTransactionsFromText(fullText);
+        
+        // Return both for debugging
+        return {
+          transactions: transactions,
+          extractedText: fullText
+        };
+        
+      } catch (error) {
+        console.error('Error parsing PDF:', error);
+        alert('Error reading PDF file: ' + error.message);
+        return { transactions: [], extractedText: '' };
+      }
+    }
+    
+    function parseTransactionsFromText(text) {
+      const transactions = [];
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      console.log(`Parsing ${lines.length} lines from PDF`);
+      
+      // Detect if this is First National Bank format (has specific headers)
+      const isFNBFormat = text.includes('Post Date') && text.includes('Debits') && text.includes('Credits');
+      
+      if (isFNBFormat) {
+        console.log('Detected First National Bank format');
+        return parseFNBFormat(lines);
+      }
+      
+      // Fall back to generic parser
+      return parseGenericFormat(lines);
+    }
+    
+    function parseFNBFormat(lines) {
+      const transactions = [];
+      let inTransactionSection = false;
+      let totalLinesProcessed = 0;
+      let skippedNoDate = 0;
+      let skippedNoAmounts = 0;
+      let skippedCredits = 0;
+      let skippedTransfers = 0;
+      
+      console.log(`=== Starting FNB Parser (All Pages) ===`);
+      console.log(`Total lines: ${lines.length}`);
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Look for transaction section start
+        if (line.includes('Post Date') && line.includes('Description')) {
+          inTransactionSection = true;
+          console.log(`✓ Found transaction section at line ${i}`);
+          continue;
+        }
+        
+        // DON'T stop at "Statement Ending" - transactions continue on next pages!
+        // Only stop at actual end markers that indicate no more transactions
+        if (inTransactionSection && (
+            line.includes('Daily Balances') || 
+            line.includes('Overdraft and Returned') ||
+            line.includes('Service Charge Summary') ||
+            line.includes('THIS PAGE LEFT INTENTIONALLY BLANK')
+        )) {
+          console.log(`✗ End of transactions at line ${i}: "${line.substring(0, 40)}"`);
+          break;
+        }
+        
+        if (!inTransactionSection) continue;
+        
+        totalLinesProcessed++;
+        
+        // Skip balance lines
+        if (line.includes('Balance Last Statement') || line.includes('Balance This Statement')) {
+          continue;
+        }
+        
+        // Check if line starts with a date
+        const dateMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+)$/);
+        if (!dateMatch) {
+          skippedNoDate++;
+          continue;
+        }
+        
+        const dateStr = dateMatch[1];
+        const descLine1 = dateMatch[2].trim();
+        
+        // Look ahead for continuation lines
+        let descLine2 = '';
+        let amountLine = '';
+        let linesToSkip = 0;
+        
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim();
+          const hasAmounts = /\$[\d,]+\.\d{2}/.test(nextLine);
+          const hasDate = /^\d{2}\/\d{2}\/\d{4}/.test(nextLine);
+          
+          if (hasAmounts && !hasDate) {
+            // 1-line: amounts on next line
+            amountLine = nextLine;
+            linesToSkip = 1;
+          } else if (!hasAmounts && !hasDate && nextLine.length > 0) {
+            // 2-line: description continues, then amounts
+            descLine2 = nextLine;
+            if (i + 2 < lines.length) {
+              amountLine = lines[i + 2].trim();
+              linesToSkip = 2;
+            }
+          } else if (/\$[\d,]+\.\d{2}/.test(descLine1)) {
+            // Inline: amounts on same line
+            amountLine = descLine1;
+            linesToSkip = 0;
+          }
+        }
+        
+        if (!amountLine) {
+          skippedNoAmounts++;
+          continue;
+        }
+        
+        // Combine description
+        let fullDescription = descLine1;
+        if (descLine2) {
+          fullDescription = (descLine1 + ' ' + descLine2).replace(/\s+/g, ' ').trim();
+        }
+        
+        // Extract description before amounts
+        const amountsInDesc = [...fullDescription.matchAll(/\$[\d,]+\.\d{2}/g)];
+        if (amountsInDesc.length > 0) {
+          const firstAmountPos = fullDescription.indexOf(amountsInDesc[0][0]);
+          fullDescription = fullDescription.substring(0, firstAmountPos).trim();
+        }
+        
+        let description = fullDescription.replace(/^\d+\s+/, '').trim();
+        
+        if (description.length < 3) {
+          i += linesToSkip;
+          continue;
+        }
+        
+        // Extract amounts
+        const amounts = [...amountLine.matchAll(/\$[\d,]+\.\d{2}/g)];
+        
+        if (amounts.length < 1) {
+          skippedNoAmounts++;
+          i += linesToSkip;
+          continue;
+        }
+        
+        const transactionAmount = parseFloat(amounts[0][0].replace(/[$,]/g, ''));
+        
+        if (transactionAmount <= 0 || isNaN(transactionAmount)) {
+          i += linesToSkip;
+          continue;
+        }
+        
+        const descLower = description.toLowerCase();
+        
+        // Check if TRANSFER - SKIP COMPLETELY
+        const isTransfer = descLower.includes('xfer') ||
+                          descLower.includes('transfer') ||
+                          descLower.includes('x-fer') ||
+                          descLower.includes('trnsfr') ||
+                          descLower.includes('tfr') ||
+                          descLower.includes('internet xfer') ||
+                          descLower.includes('online transfer') ||
+                          descLower.includes('mobile transfer') ||
+                          descLower.includes('acct transfer') ||
+                          descLower.includes('account transfer');
+        
+        if (isTransfer) {
+          // Skip ALL transfers (to/from other accounts)
+          // These are just moving money between your own accounts, not spending
+          skippedTransfers++;
+          if (transactions.length < 10) {
+            console.log(`  ⇄ Transfer skipped: $${transactionAmount.toFixed(2)} - ${description.substring(0, 40)}`);
+          }
+          i += linesToSkip;
+          continue;
+        }
+        
+        // Check if CREDIT (deposit) - SKIP
+        const isCredit = descLower.includes('dir dep') ||
+                        descLower.includes('fisher ma dir dep') ||
+                        descLower.includes('deposit') ||
+                        descLower.includes('refund') ||
+                        descLower.includes('zelle from');
+        
+        if (isCredit) {
+          skippedCredits++;
+          if (transactions.length < 10) {
+            console.log(`  ⊘ Credit: $${transactionAmount.toFixed(2)} - ${description.substring(0, 40)}`);
+          }
+          i += linesToSkip;
+          continue;
+        }
+        
+        // This is a DEBIT - add it!
+        try {
+          const parsedDate = new Date(dateStr);
+          if (isNaN(parsedDate.getTime())) {
+            i += linesToSkip;
+            continue;
+          }
+          
+          const isDuplicate = transactions.some(t => 
+            Math.abs(t.date - parsedDate) < 1000 && 
+            Math.abs(t.amount - transactionAmount) < 0.01 &&
+            t.description.substring(0, 15) === description.substring(0, 15)
+          );
+          
+          if (!isDuplicate) {
+            // Generate unique ID with fallback for browsers without crypto.randomUUID
+            let uniqueId;
+            try {
+              uniqueId = crypto.randomUUID();
+            } catch (e) {
+              // Fallback: generate simple unique ID
+              uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            }
+            
+            transactions.push({
+              id: uniqueId,
+              date: parsedDate,
+              description: description,
+              amount: transactionAmount
+            });
+            
+            if (transactions.length <= 20) {
+              console.log(`  ✓ #${transactions.length}: $${transactionAmount.toFixed(2)} - ${description.substring(0, 40)}`);
+            } else if (transactions.length === 21) {
+              console.log(`  ... (continuing, showing final count only)`);
+            }
+          }
+          
+          i += linesToSkip;
+          
+        } catch (e) {
+          console.error(`  Error: ${e.message}`);
+          i += linesToSkip;
+        }
+      }
+      
+      console.log(`=== FNB Parser Complete ===`);
+      console.log(`📊 Total transactions: ${transactions.length}`);
+      console.log(`📝 Lines processed: ${totalLinesProcessed}`);
+      console.log(`⊗ Skipped (no date): ${skippedNoDate}`);
+      console.log(`⊗ Skipped (no amounts): ${skippedNoAmounts}`);
+      console.log(`⇄ Skipped (transfers): ${skippedTransfers}`);
+      console.log(`⊘ Skipped (credits): ${skippedCredits}`);
+      
+      return transactions;
+    }
+    
+    function parseGenericFormat(lines) {
+      const transactions = [];
+      
+      // Multiple date pattern formats
+      const datePatterns = [
+        /(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/,  // MM/DD/YYYY or MM-DD-YYYY
+        /(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/,    // YYYY-MM-DD
+        /(\d{1,2}[-\/]\d{1,2})/,              // MM/DD (assume current year)
+        /([A-Z][a-z]{2}\s+\d{1,2},?\s+\d{4})/, // Dec 15, 2024
+        /(\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4})/   // 15 Dec 2024
+      ];
+      
+      // More flexible amount patterns
+      const amountPatterns = [
+        /\$\s*(\d{1,3}(?:,\d{3})*\.\d{2})/,           // $1,234.56
+        /\(\$?\s*(\d{1,3}(?:,\d{3})*\.\d{2})\)/,      // ($1,234.56)
+        /-\$\s*(\d{1,3}(?:,\d{3})*\.\d{2})/,          // -$1,234.56
+        /(\d{1,3}(?:,\d{3})*\.\d{2})\s*-/,            // 1,234.56-
+        /(\d{1,3}(?:,\d{3})*\.\d{2})\s*DR/,           // 1,234.56 DR
+      ];
+      
+      let transactionsFound = 0;
+      
+      // Try parsing each line
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Skip obvious headers and footers
+        const lineLower = line.toLowerCase();
+        if (lineLower.includes('statement') || 
+            lineLower.includes('balance') && lineLower.includes('forward') ||
+            lineLower.includes('page ') ||
+            lineLower.includes('continued') ||
+            lineLower.includes('total') && lineLower.includes('deposits') ||
+            lineLower.includes('account number') ||
+            lineLower.includes('date') && lineLower.includes('description')) {
+          continue;
+        }
+        
+        // Try to find date
+        let dateMatch = null;
+        for (const pattern of datePatterns) {
+          dateMatch = line.match(pattern);
+          if (dateMatch) break;
+        }
+        
+        if (!dateMatch) continue;
+        
+        // Try to find amount
+        let amountMatch = null;
+        for (const pattern of amountPatterns) {
+          const matches = [...line.matchAll(new RegExp(pattern, 'g'))];
+          if (matches.length > 0) {
+            amountMatch = matches[matches.length - 1];
+            break;
+          }
+        }
+        
+        if (!amountMatch) continue;
+        
+        // Extract description
+        const datePos = line.indexOf(dateMatch[0]);
+        let amountPos = line.indexOf(amountMatch[0]);
+        
+        let description = '';
+        if (amountPos > datePos) {
+          description = line.substring(datePos + dateMatch[0].length, amountPos).trim();
+        } else {
+          if (i + 1 < lines.length) {
+            description = lines[i + 1].trim();
+          }
+        }
+        
+        description = description
+          .replace(/\s+/g, ' ')
+          .replace(/[*#]+/g, '')
+          .replace(/\s+-\s+/g, ' - ')
+          .replace(/^\d+\s+/, '')
+          .trim();
+        
+        if (description.length < 3) continue;
+        
+        let amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+        if (isNaN(amount) || amount === 0) continue;
+        
+        const fullContext = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 2)).join(' ').toLowerCase();
+        
+        const isDebit = 
+          line.includes('(') || line.includes('-$') || line.includes(' DR') || line.includes('DEBIT') ||
+          fullContext.includes('withdrawal') || fullContext.includes('payment') || 
+          fullContext.includes('purchase') || fullContext.includes('pos') || 
+          fullContext.includes('atm') || fullContext.includes('check') || 
+          fullContext.includes('fee') || fullContext.includes('transfer to');
+        
+        const isCredit = 
+          fullContext.includes('deposit') || fullContext.includes('credit') ||
+          fullContext.includes('transfer in') || fullContext.includes('refund') ||
+          line.includes(' CR');
+        
+        if (isCredit && !isDebit) continue;
+        if (!isDebit) continue;
+        
+        try {
+          let parsedDate = new Date(dateMatch[0]);
+          
+          if (dateMatch[0].split(/[-\/]/).length === 2) {
+            const [month, day] = dateMatch[0].split(/[-\/]/);
+            parsedDate = new Date(new Date().getFullYear(), parseInt(month) - 1, parseInt(day));
+          }
+          
+          if (isNaN(parsedDate.getTime())) continue;
+          
+          const isDuplicate = transactions.some(t => 
+            Math.abs(t.date - parsedDate) < 1000 && 
+            Math.abs(t.amount - amount) < 0.01 &&
+            t.description.substring(0, 10) === description.substring(0, 10)
+          );
+          
+          if (!isDuplicate) {
+            transactions.push({
+              date: parsedDate,
+              description: description,
+              amount: amount
+            });
+            transactionsFound++;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      console.log(`Found ${transactionsFound} transactions in generic format`);
+      transactions.sort((a, b) => a.date - b.date);
+      return transactions;
+    }
+    
+    function categorizeTransactions(transactions) {
+      const categories = {
+        'Credit Card Payments': { total: 0, count: 0, transactions: [], keywords: [] },  // Manual detection, no keywords
+        'Groceries': { total: 0, count: 0, transactions: [], keywords: ['grocery', 'market', 'walmart', 'target', 'kroger', 'safeway', 'whole foods', 'trader joe', 'aldi', 'giant eagle', 'costco', 'sams club', 'food lion', 'publix', 'wegmans', 'heb', 'albertsons', 'food market', 'supermarket'] },
+        'Dining': { total: 0, count: 0, transactions: [], keywords: ['restaurant', 'cafe', 'coffee', 'pizza', 'burger', 'taco', 'dine', 'grill', 'bar', 'pub', 'olive garden', 'applebee', 'chili', 'red lobster', 'outback', 'texas roadhouse', 'panera', 'chipotle', 'subway', 'mcdon', 'wendy', 'burger king', 'taco bell', 'kfc', 'popeyes', 'arbys', 'sonic', 'dairy queen', 'starbucks', 'dunkin', 'doordash', 'uber eats', 'grubhub', 'domino', 'papa john', 'little caesar', 'pizza hut', 'ljs', 'long john silver', 'raising cane', 'five guys', 'in-n-out', 'shake shack', 'whataburger', 'culver', 'zaxby', 'bojangle', 'hardee', 'carl jr', 'jack in the box', 'del taco', 'qdoba', 'moe', 'panda express', 'chick-fil-a'] },
+        'Gas & Fuel': { total: 0, count: 0, transactions: [], keywords: ['gas', 'fuel', 'shell', 'exxon', 'chevron', 'bp', 'mobil', 'speedway', 'circle k', 'wawa', 'sheetz', 'sunoco', 'marathon', 'phillips 66', 'valero', 'arco', 'amoco', 'conoco', 'citgo', 'kwik fill', 'flying j', 'pilot', 'loves', 'racetrac', 'qt', 'quiktrip', 'casey', 'cumberland', 'getgo', 'mapco', 'maverik', 'murphy', 'racetrack', 'royal farms', 'stripes', 'thorntons', 'turkey hill', 'united dairy', '7-eleven'] },
+        'Entertainment': { total: 0, count: 0, transactions: [], keywords: ['movie', 'theater', 'cinema', 'netflix', 'hulu', 'disney', 'spotify', 'amazon prime', 'apple', 'paramount', 'game', 'playstation', 'xbox', 'steam', 'entertainment', 'youtube', 'twitch', 'roblox', 'fortnite'] },
+        'Shopping': { total: 0, count: 0, transactions: [], keywords: ['amazon', 'ebay', 'etsy', 'shop', 'store', 'retail', 'mall', 'clothing', 'fashion', 'best buy', 'home depot', 'lowes', 'ace hardware', 'harbor freight', 'menards', 'dollar general', 'dollar tree', 'family dollar', 'five below', 'tj maxx', 'marshalls', 'ross', 'burlington', 'kohls', 'macys', 'jcpenney', 'nordstrom', 'dillard'] },
+        'Utilities': { total: 0, count: 0, transactions: [], keywords: ['electric', 'power', 'water', 'gas company', 'utility', 'internet', 'cable', 'phone', 'wireless', 'verizon', 'att', 't-mobile', 'sprint', 'comcast', 'xfinity', 'spectrum', 'cox', 'frontier', 'centurylink'] },
+        'Transportation': { total: 0, count: 0, transactions: [], keywords: ['uber', 'lyft', 'taxi', 'transit', 'parking', 'toll', 'metro', 'bus', 'train', 'subway'] },
+        'Healthcare': { total: 0, count: 0, transactions: [], keywords: ['pharmacy', 'cvs', 'walgreens', 'rite aid', 'doctor', 'medical', 'hospital', 'clinic', 'health', 'dental', 'vision'] },
+        'Other': { total: 0, count: 0, transactions: [], keywords: [] }
+      };
+      
+      transactions.forEach(t => {
+        // If transaction already has a category assigned (from saved reassignments), use it
+        if (t.category) {
+          // Ensure category exists in our structure
+          if (!categories[t.category]) {
+            categories[t.category] = { total: 0, count: 0, transactions: [], keywords: [] };
+          }
+          categories[t.category].total += t.amount;
+          categories[t.category].count++;
+          categories[t.category].transactions.push(t);
+          return;
+        }
+        
+        // Check if this is a credit card PAYMENT (not a charge)
+        const descLower = t.description.toLowerCase();
+        const isCreditCardPayment = (
+          (descLower.includes('capital one') || descLower.includes('cap one') || descLower.includes('cap1')) ||
+          descLower.includes('credit one') ||
+          descLower.includes('discover') && descLower.includes('payment') ||
+          descLower.includes('chase') && descLower.includes('payment') ||
+          descLower.includes('amex') && descLower.includes('payment') ||
+          descLower.includes('synchrony') && descLower.includes('payment') ||
+          descLower.includes('service finance') ||
+          descLower.includes('credit card payment') ||
+          (descLower.includes('pmt') && descLower.includes('credit'))
+        );
+        
+        if (isCreditCardPayment) {
+          t.category = 'Credit Card Payments';
+          categories['Credit Card Payments'].total += t.amount;
+          categories['Credit Card Payments'].count++;
+          categories['Credit Card Payments'].transactions.push(t);
+          return;
+        }
+        
+        // Otherwise, auto-categorize
+        let categorized = false;
+        const desc = t.description.toLowerCase();
+        
+        for (const [category, data] of Object.entries(categories)) {
+          if (category === 'Other' || category === 'Credit Card Payments') continue;
+          if (data.keywords.some(kw => desc.includes(kw))) {
+            t.category = category;  // Assign category to transaction
+            data.total += t.amount;
+            data.count++;
+            data.transactions.push(t);
+            categorized = true;
+            break;
+          }
+        }
+        
+        if (!categorized) {
+          t.category = 'Other';
+          categories['Other'].total += t.amount;
+          categories['Other'].count++;
+          categories['Other'].transactions.push(t);
+        }
+      });
+      
+      return categories;
+    }
+    
+    function findRecurringPayments(transactions) {
+      const grouped = {};
+      
+      // Group similar transactions
+      transactions.forEach(t => {
+        const key = t.description.substring(0, 20).toLowerCase().trim();
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(t);
+      });
+      
+      const recurring = [];
+      
+      for (const [key, txns] of Object.entries(grouped)) {
+        if (txns.length < 2) continue;
+        
+        // Sort by date
+        txns.sort((a, b) => a.date - b.date);
+        
+        // Calculate average days between payments
+        const intervals = [];
+        for (let i = 1; i < txns.length; i++) {
+          const days = (txns[i].date - txns[i-1].date) / (1000 * 60 * 60 * 24);
+          intervals.push(days);
+        }
+        
+        const avgInterval = intervals.reduce((a,b) => a+b, 0) / intervals.length;
+        const avgAmount = txns.reduce((a,b) => a + b.amount, 0) / txns.length;
+        
+        // If payments are roughly monthly (25-35 days) or weekly (5-9 days) or bi-weekly (12-16 days)
+        if ((avgInterval >= 25 && avgInterval <= 35) || 
+            (avgInterval >= 5 && avgInterval <= 9) || 
+            (avgInterval >= 12 && avgInterval <= 16)) {
+          let frequency = 'monthly';
+          if (avgInterval >= 5 && avgInterval <= 9) frequency = 'weekly';
+          if (avgInterval >= 12 && avgInterval <= 16) frequency = 'biweekly';
+          
+          recurring.push({
+            description: txns[0].description,
+            avgAmount: avgAmount,
+            frequency: frequency,
+            count: txns.length,
+            lastDate: txns[txns.length - 1].date
+          });
+        }
+      }
+      
+      return recurring.sort((a, b) => b.avgAmount - a.avgAmount);
+    }
+    
+    function findDuplicates(transactions) {
+      const duplicates = [];
+      const seen = new Set();
+      
+      for (let i = 0; i < transactions.length; i++) {
+        for (let j = i + 1; j < transactions.length; j++) {
+          const t1 = transactions[i];
+          const t2 = transactions[j];
+          
+          // Same day (within hours, not just same date)
+          const timeDiff = Math.abs(t1.date - t2.date);
+          const sameDay = timeDiff < (1000 * 60 * 60 * 24); // Within 24 hours
+          const veryClose = timeDiff < (1000 * 60 * 60 * 2); // Within 2 hours (more likely duplicate)
+          
+          // Exact same amount
+          const sameAmount = Math.abs(t1.amount - t2.amount) < 0.01;
+          
+          // Very similar description (at least 70% match)
+          const desc1 = t1.description.toLowerCase().trim();
+          const desc2 = t2.description.toLowerCase().trim();
+          const minLength = Math.min(desc1.length, desc2.length);
+          const matchLength = Math.min(20, minLength); // Compare first 20 chars or less
+          const similarDesc = desc1.substring(0, matchLength) === desc2.substring(0, matchLength);
+          
+          // Create unique key to avoid showing same duplicate twice
+          const key1 = `${t1.date.getTime()}-${t1.amount}-${desc1.substring(0, 15)}`;
+          const key2 = `${t2.date.getTime()}-${t2.amount}-${desc2.substring(0, 15)}`;
+          const pairKey = [key1, key2].sort().join('|');
+          
+          // Only flag as duplicate if very close in time AND same amount AND similar description
+          if (veryClose && sameAmount && similarDesc && !seen.has(pairKey)) {
+            duplicates.push({ t1, t2 });
+            seen.add(pairKey);
+          }
+        }
+      }
+      
+      return duplicates;
+    }
+    
+    function displayCategoryBreakdown(categories) {
+      const container = document.getElementById('categoryBreakdown');
+      const total = Object.values(categories).reduce((sum, cat) => sum + cat.total, 0);
+      
+      let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">';
+      
+      for (const [category, data] of Object.entries(categories)) {
+        if (data.count === 0) continue;
+        const percentage = ((data.total / total) * 100).toFixed(1);
+        
+        html += `
+          <div onclick="showCategoryDetails('${category}')" style="background: #f5f5f7; padding: 16px; border-radius: 8px; cursor: pointer; transition: transform 0.2s; border: 2px solid transparent;" 
+               onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#007aff';" 
+               onmouseout="this.style.transform='scale(1)'; this.style.borderColor='transparent';"
+               title="Click to see details">
+            <div style="font-weight: 600; font-size: 14px; color: #1d1d1f; margin-bottom: 8px;">${category}</div>
+            <div style="font-size: 24px; font-weight: 700; color: #007aff; margin-bottom: 4px;">$${data.total.toFixed(2)}</div>
+            <div style="font-size: 12px; color: #86868b;">${data.count} transactions • ${percentage}%</div>
+            <div style="font-size: 11px; color: #007aff; margin-top: 8px;">👆 Click for details</div>
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+      
+      // Add details container
+      html += `
+        <div id="categoryDetails" style="display: none; margin-top: 20px; background: white; border: 2px solid #007aff; border-radius: 12px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 id="categoryDetailsTitle" style="margin: 0;"></h3>
+            <button onclick="closeCategoryDetails()" style="background: #ff3b30; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Close</button>
+          </div>
+          <div id="categoryDetailsContent"></div>
+        </div>
+      `;
+      
+      container.innerHTML = html;
+      
+      // Store categories for later access
+      window.categoryData = categories;
+    }
+    
+    function showCategoryDetails(categoryName) {
+      const category = window.categoryData[categoryName];
+      if (!category) return;
+      
+      const detailsDiv = document.getElementById('categoryDetails');
+      const titleDiv = document.getElementById('categoryDetailsTitle');
+      const contentDiv = document.getElementById('categoryDetailsContent');
+      
+      titleDiv.textContent = `${categoryName} - ${category.count} Transactions`;
+      
+      // Calculate monthly breakdown
+      const byMonth = {};
+      category.transactions.forEach(t => {
+        const monthKey = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+        const monthName = t.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        byMonth[monthKey] = byMonth[monthKey] || { total: 0, count: 0, name: monthName, transactions: [] };
+        byMonth[monthKey].total += t.amount;
+        byMonth[monthKey].count++;
+        byMonth[monthKey].transactions.push(t);
+      });
+      
+      // Sort months reverse chronologically
+      const monthEntries = Object.entries(byMonth).sort(([a], [b]) => b.localeCompare(a));
+      
+      // Sort transactions by date (newest first)
+      const sortedTransactions = [...category.transactions].sort((a, b) => b.date - a.date);
+      
+      // Debug: Check if transactions have IDs
+      console.log(`Category "${categoryName}" has ${sortedTransactions.length} transactions`);
+      const transactionsWithIds = sortedTransactions.filter(t => t.id);
+      console.log(`  - ${transactionsWithIds.length} have IDs`);
+      if (sortedTransactions.length > 0 && !sortedTransactions[0].id) {
+        console.warn('⚠️ Transactions are missing IDs! Re-analyze statements to fix.');
+      }
+      
+      let html = `
+        <!-- Monthly Breakdown Toggle -->
+        <div style="margin-bottom: 20px;">
+          <button onclick="toggleMonthlyView()" id="monthlyToggle" 
+                  style="background: #007aff; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+            📊 Show Monthly Breakdown
+          </button>
+        </div>
+        
+        <!-- Monthly Breakdown (hidden by default) -->
+        <div id="monthlyBreakdown" style="display: none; margin-bottom: 20px; background: #f5f5f7; padding: 16px; border-radius: 8px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 16px; color: #1d1d1f;">Monthly Breakdown</h4>
+          <div style="display: grid; gap: 8px;">
+            ${monthEntries.map(([key, data]) => `
+              <div style="background: white; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 600; font-size: 14px; color: #1d1d1f;">${data.name}</div>
+                  <div style="font-size: 12px; color: #86868b;">${data.count} transactions</div>
+                </div>
+                <div style="font-size: 18px; font-weight: 700; color: #007aff;">$${data.total.toFixed(2)}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 2px solid #e5e5e7; display: flex; justify-content: space-between; font-weight: 700;">
+            <span>Average per Month:</span>
+            <span style="color: #007aff;">$${(category.total / monthEntries.length).toFixed(2)}</span>
+          </div>
+        </div>
+        
+        <!-- Transaction List -->
+        <div style="max-height: 400px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: #f5f5f7;">
+              <tr>
+                <th style="padding: 12px; text-align: left; font-size: 12px; color: #64748b; border-bottom: 2px solid #e5e5e7;">Date</th>
+                <th style="padding: 12px; text-align: left; font-size: 12px; color: #64748b; border-bottom: 2px solid #e5e5e7;">Description</th>
+                <th style="padding: 12px; text-align: right; font-size: 12px; color: #64748b; border-bottom: 2px solid #e5e5e7;">Amount</th>
+                <th style="padding: 12px; text-align: center; font-size: 12px; color: #64748b; border-bottom: 2px solid #e5e5e7;">Move</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      
+      sortedTransactions.forEach((t, idx) => {
+        // Clean and format description
+        let displayDesc = t.description
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        const maxLength = 50;
+        const truncated = displayDesc.length > maxLength;
+        const shortDesc = truncated ? displayDesc.substring(0, maxLength) + '...' : displayDesc;
+        
+        // Store index in category for reliable lookup
+        const transactionIndex = window.analyzedTransactions.findIndex(at => 
+          at.description === t.description && 
+          at.amount === t.amount && 
+          Math.abs(at.date - t.date) < 1000
+        );
+        
+        html += `
+          <tr style="border-bottom: 1px solid #e5e5e7; background: ${idx % 2 === 0 ? 'white' : '#f8fafc'};">
+            <td style="padding: 12px; font-size: 13px; color: #64748b; white-space: nowrap;">${t.date.toLocaleDateString()}</td>
+            <td style="padding: 12px; font-size: 14px; color: #1e293b; max-width: 400px; word-wrap: break-word;" title="${displayDesc}">${shortDesc}</td>
+            <td style="padding: 12px; text-align: right; font-size: 15px; font-weight: 600; color: #dc2626; white-space: nowrap;">$${t.amount.toFixed(2)}</td>
+            <td style="padding: 12px; text-align: center;">
+              <button class="move-btn" 
+                      data-transaction-index="${transactionIndex}" 
+                      data-category="${categoryName}" 
+                      data-description="${displayDesc}" 
+                      data-amount="${t.amount}"
+                      style="background: #34c759; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                ↔️ Move
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      
+      html += `
+            </tbody>
+            <tfoot>
+              <tr style="background: #f5f5f7; font-weight: 700;">
+                <td colspan="3" style="padding: 12px; font-size: 14px; color: #1e293b;">Total</td>
+                <td style="padding: 12px; text-align: right; font-size: 16px; color: #dc2626;">$${category.total.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      `;
+      
+      contentDiv.innerHTML = html;
+      detailsDiv.style.display = 'block';
+      
+      // Add event listeners for Move buttons
+      setTimeout(() => {
+        document.querySelectorAll('.move-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const transactionIndex = parseInt(this.getAttribute('data-transaction-index'));
+            const category = this.getAttribute('data-category');
+            const description = this.getAttribute('data-description');
+            const amount = parseFloat(this.getAttribute('data-amount'));
+            moveTransactionByIndex(transactionIndex, category, description, amount);
+          });
+        });
+      }, 0);
+      
+      // Scroll to details
+      detailsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    function toggleMonthlyView() {
+      const monthlyDiv = document.getElementById('monthlyBreakdown');
+      const toggleBtn = document.getElementById('monthlyToggle');
+      
+      if (monthlyDiv.style.display === 'none') {
+        monthlyDiv.style.display = 'block';
+        toggleBtn.textContent = '📊 Hide Monthly Breakdown';
+      } else {
+        monthlyDiv.style.display = 'none';
+        toggleBtn.textContent = '📊 Show Monthly Breakdown';
+      }
+    }
+    
+    function moveTransactionByIndex(transactionIndex, currentCategory, description, amount) {
+      // Store data in a global variable
+      window.currentMoveData = {
+        transactionIndex: transactionIndex,
+        currentCategory: currentCategory,
+        description: description,
+        amount: amount
+      };
+      
+      console.log('Moving transaction at index:', transactionIndex);
+      
+      // Get all available categories
+      const allCategories = Object.keys(window.categoryData);
+      
+      // Create modal for category selection
+      const modalHTML = `
+        <div id="moveCategoryModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+          <div style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px;">Move Transaction</h3>
+            <p style="color: #86868b; font-size: 14px; margin-bottom: 16px;">
+              <strong>${description.substring(0, 50)}</strong><br>
+              $${amount.toFixed(2)}
+            </p>
+            
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px;">Select New Category:</label>
+              <select id="newCategorySelect" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;">
+                ${allCategories.filter(c => c !== currentCategory).map(cat => `
+                  <option value="${cat}">${cat}</option>
+                `).join('')}
+                <option value="__custom__">+ Create New Category</option>
+              </select>
+            </div>
+            
+            <div id="customCategoryInput" style="display: none; margin-bottom: 16px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px;">New Category Name:</label>
+              <input type="text" id="customCategoryName" placeholder="e.g., Alcohol" 
+                     style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="applySimilar" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+                <span style="font-size: 14px; color: #1d1d1f;">Apply to similar transactions (same merchant)</span>
+              </label>
+              <div style="font-size: 12px; color: #86868b; margin-top: 4px; margin-left: 26px;">
+                This will move all transactions with similar descriptions to the new category
+              </div>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+              <button id="cancelMoveBtn" 
+                      style="flex: 1; background: #86868b; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                Cancel
+              </button>
+              <button id="confirmMoveBtn"
+                      style="flex: 1; background: #007aff; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                Move
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Add modal to page
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+      
+      // Add event listeners
+      document.getElementById('newCategorySelect').addEventListener('change', function(e) {
+        const customInput = document.getElementById('customCategoryInput');
+        customInput.style.display = e.target.value === '__custom__' ? 'block' : 'none';
+      });
+      
+      document.getElementById('cancelMoveBtn').addEventListener('click', closeMoveModal);
+      document.getElementById('confirmMoveBtn').addEventListener('click', confirmMoveTransactionByIndex);
+    }
+    
+    function confirmMoveTransactionByIndex() {
+      // Get data from global variable
+      const { transactionIndex, currentCategory, description, amount } = window.currentMoveData;
+      
+      console.log('Confirming move for index:', transactionIndex);
+      
+      if (!window.analyzedTransactions || transactionIndex < 0 || transactionIndex >= window.analyzedTransactions.length) {
+        alert('Transaction not found. Please re-analyze your statements.');
+        closeMoveModal();
+        return;
+      }
+      
+      const selectEl = document.getElementById('newCategorySelect');
+      let newCategory = selectEl.value;
+      const applySimilar = document.getElementById('applySimilar').checked;
+      
+      // Handle custom category
+      if (newCategory === '__custom__') {
+        const customName = document.getElementById('customCategoryName').value.trim();
+        if (!customName) {
+          alert('Please enter a category name');
+          return;
+        }
+        newCategory = customName;
+      }
+      
+      // Get the transaction
+      const transaction = window.analyzedTransactions[transactionIndex];
+      
+      console.log('Found transaction:', transaction.description);
+      
+      // Move this transaction
+      transaction.category = newCategory;
+      data.categoryReassignments[transaction.description.toLowerCase()] = newCategory;
+      
+      // If applying to similar, move all similar transactions
+      let movedCount = 1;
+      if (applySimilar) {
+        window.analyzedTransactions.forEach((t, i) => {
+          if (i === transactionIndex) return; // Skip the one we already moved
+          const similarity = calculateSimilarity(t.description, description);
+          if (similarity >= 0.90) {  // Very high threshold - only near-exact matches
+            t.category = newCategory;
+            data.categoryReassignments[t.description.toLowerCase()] = newCategory;
+            movedCount++;
+          }
+        });
+        
+        console.log(`✓ Moved ${movedCount} transaction(s) to "${newCategory}"`);
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Recategorize and refresh display
+      const categories = categorizeTransactions(window.analyzedTransactions);
+      displayCategoryBreakdown(categories);
+      
+      // Close modal
+      closeMoveModal();
+      
+      // Show success message
+      alert(`✓ ${movedCount} transaction${movedCount > 1 ? 's' : ''} moved to "${newCategory}"`);
+    }
+    
+    function moveTransaction(transactionId, currentCategory, description, amount) {
+      // Store data in a global variable to avoid escaping issues
+      window.currentMoveData = {
+        transactionId: transactionId,
+        currentCategory: currentCategory,
+        description: description,
+        amount: amount
+      };
+      
+      // Get all available categories
+      const allCategories = Object.keys(window.categoryData);
+      
+      // Create modal for category selection
+      const modalHTML = `
+        <div id="moveCategoryModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+          <div style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px;">Move Transaction</h3>
+            <p style="color: #86868b; font-size: 14px; margin-bottom: 16px;">
+              <strong>${description.substring(0, 50)}</strong><br>
+              $${amount.toFixed(2)}
+            </p>
+            
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px;">Select New Category:</label>
+              <select id="newCategorySelect" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;">
+                ${allCategories.filter(c => c !== currentCategory).map(cat => `
+                  <option value="${cat}">${cat}</option>
+                `).join('')}
+                <option value="__custom__">+ Create New Category</option>
+              </select>
+            </div>
+            
+            <div id="customCategoryInput" style="display: none; margin-bottom: 16px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px;">New Category Name:</label>
+              <input type="text" id="customCategoryName" placeholder="e.g., Alcohol" 
+                     style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="applySimilar" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+                <span style="font-size: 14px; color: #1d1d1f;">Apply to similar transactions (same merchant)</span>
+              </label>
+              <div style="font-size: 12px; color: #86868b; margin-top: 4px; margin-left: 26px;">
+                This will move all transactions with similar descriptions to the new category
+              </div>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+              <button id="cancelMoveBtn" 
+                      style="flex: 1; background: #86868b; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                Cancel
+              </button>
+              <button id="confirmMoveBtn"
+                      style="flex: 1; background: #007aff; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                Move
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Add modal to page
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+      
+      // Add event listeners
+      document.getElementById('newCategorySelect').addEventListener('change', function(e) {
+        const customInput = document.getElementById('customCategoryInput');
+        customInput.style.display = e.target.value === '__custom__' ? 'block' : 'none';
+      });
+      
+      document.getElementById('cancelMoveBtn').addEventListener('click', closeMoveModal);
+      document.getElementById('confirmMoveBtn').addEventListener('click', confirmMoveTransaction);
+    }
+    
+    function closeMoveModal() {
+      const modal = document.getElementById('moveCategoryModal');
+      if (modal) modal.remove();
+    }
+    
+    function confirmMoveTransaction() {
+      // Get data from global variable
+      const { transactionId, currentCategory, description, amount } = window.currentMoveData;
+      
+      console.log('Looking for transaction:', transactionId);
+      console.log('Total transactions:', window.analyzedTransactions ? window.analyzedTransactions.length : 0);
+      
+      const selectEl = document.getElementById('newCategorySelect');
+      let newCategory = selectEl.value;
+      const applySimilar = document.getElementById('applySimilar').checked;
+      
+      // Handle custom category
+      if (newCategory === '__custom__') {
+        const customName = document.getElementById('customCategoryName').value.trim();
+        if (!customName) {
+          alert('Please enter a category name');
+          return;
+        }
+        newCategory = customName;
+      }
+      
+      // Find the transaction - need to search in category data, not just analyzedTransactions
+      let transaction = null;
+      
+      // First try to find in analyzedTransactions
+      if (window.analyzedTransactions) {
+        transaction = window.analyzedTransactions.find(t => t.id === transactionId);
+      }
+      
+      // If not found, search through all categories
+      if (!transaction && window.categoryData) {
+        for (const [catName, catData] of Object.entries(window.categoryData)) {
+          transaction = catData.transactions.find(t => t.id === transactionId);
+          if (transaction) {
+            console.log('Found transaction in category:', catName);
+            break;
+          }
+        }
+      }
+      
+      if (!transaction) {
+        console.error('Transaction not found with ID:', transactionId);
+        console.log('Available IDs:', window.analyzedTransactions ? window.analyzedTransactions.slice(0, 5).map(t => t.id) : 'none');
+        alert('Transaction not found. This might be a refresh issue. Please re-analyze your statements.');
+        closeMoveModal();
+        return;
+      }
+      
+      console.log('Found transaction:', transaction.description);
+      
+      // Move this transaction
+      transaction.category = newCategory;
+      
+      // If applying to similar, move all similar transactions
+      let movedCount = 1;
+      if (applySimilar) {
+        const similarTransactions = window.analyzedTransactions.filter(t => {
+          if (t.id === transactionId) return false; // Skip the one we already moved
+          const similarity = calculateSimilarity(t.description, description);
+          return similarity > 0.85;  // Merchant name similarity threshold
+        });
+        
+        similarTransactions.forEach(t => {
+          t.category = newCategory;
+          // Store the reassignment for persistence
+          data.categoryReassignments[t.description.toLowerCase()] = newCategory;
+        });
+        
+        movedCount += similarTransactions.length;
+        console.log(`✓ Moved ${movedCount} transaction(s) to "${newCategory}"`);
+      }
+      
+      // Store single reassignment
+      data.categoryReassignments[transaction.description.toLowerCase()] = newCategory;
+      
+      // Save to localStorage
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      // Recategorize and refresh display
+      const categories = categorizeTransactions(window.analyzedTransactions);
+      displayCategoryBreakdown(categories);
+      
+      // Close modal
+      closeMoveModal();
+      
+      // Show success message
+      alert(`✓ ${movedCount} transaction${movedCount > 1 ? 's' : ''} moved to "${newCategory}"`);
+    }
+    
+    function calculateSimilarity(str1, str2) {
+      // Extract merchant name AND transaction type from description
+      // Very conservative matching - only matches truly identical merchants
+      
+      function extractMerchantAndType(description) {
+        let cleaned = description.toLowerCase();
+        
+        // Identify transaction type keywords
+        const types = {
+          payment: /\b(payment|pmt|pymt)\b/,
+          loan: /\b(loan|auto loan|car loan)\b/,
+          transfer: /\b(xfer|transfer)\b/,
+          purchase: /\b(pos pur|pin pur|purchase|debit)\b/,
+          withdrawal: /\b(atm wtd|withdrawal|cash)\b/,
+          mobile: /\bmobile\b/,
+          online: /\bonline\b/
+        };
+        
+        // Extract type
+        let transactionType = '';
+        for (const [type, regex] of Object.entries(types)) {
+          if (regex.test(cleaned)) {
+            transactionType = type;
+            break;
+          }
+        }
+        
+        // Remove common prefixes
+        cleaned = cleaned.replace(/^\d+\s+/, ''); // Remove leading transaction numbers
+        cleaned = cleaned.replace(/^(pos pur|pin pur|recurring|atm wtd|debit card purchase)\s+/i, '');
+        
+        // Remove dates/times (various formats)
+        cleaned = cleaned.replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?\s+\d{1,2}:\d{2}/g, '');
+        cleaned = cleaned.replace(/\d{1,2}\/\d{1,2}\s+/g, '');
+        cleaned = cleaned.replace(/\d{2}:\d{2}\s*/g, '');
+        
+        // Remove location codes and identifiers at the end
+        cleaned = cleaned.replace(/\s+[a-z]{2}\s+\d+.*$/i, '');
+        cleaned = cleaned.replace(/\s+\d{5,}.*$/i, '');
+        cleaned = cleaned.replace(/\s+#\d+.*$/i, '');
+        
+        // Get first meaningful words (usually the merchant name)
+        const words = cleaned.trim().split(/\s+/).filter(w => w.length > 0);
+        
+        // Take first 2-4 words as merchant name
+        let merchantName = words.slice(0, 4).join(' ');
+        
+        // Remove remaining numbers and special chars but keep letters and spaces
+        merchantName = merchantName.replace(/[^a-z\s]/g, '').trim();
+        
+        // Return both merchant and type
+        return {
+          merchant: merchantName,
+          type: transactionType,
+          fullKey: transactionType ? `${merchantName}|${transactionType}` : merchantName
+        };
+      }
+      
+      const info1 = extractMerchantAndType(str1);
+      const info2 = extractMerchantAndType(str2);
+      
+      console.log('Comparing:', info1.fullKey, 'vs', info2.fullKey);
+      
+      // STRICT RULE: If both have types, they MUST match
+      if (info1.type && info2.type && info1.type !== info2.type) {
+        console.log('  → Different transaction types:', info1.type, 'vs', info2.type, '→ 0%');
+        return 0.0;
+      }
+      
+      // STRICT RULE: If one has type and other doesn't, be very careful
+      if ((info1.type && !info2.type) || (!info1.type && info2.type)) {
+        console.log('  → Type mismatch (one has, one doesn\'t) → 0%');
+        return 0.0;
+      }
+      
+      // Compare full keys first (merchant + type)
+      if (info1.fullKey === info2.fullKey) {
+        console.log('  → Exact match → 100%');
+        return 1.0;
+      }
+      
+      // If merchant names are empty, no match
+      if (!info1.merchant || !info2.merchant) {
+        console.log('  → Empty merchant name → 0%');
+        return 0.0;
+      }
+      
+      // EXACT merchant name match only
+      if (info1.merchant === info2.merchant) {
+        console.log('  → Same merchant → 100%');
+        return 1.0;
+      }
+      
+      // Check for very specific common variations ONLY
+      // These are merchants that are known to have slight variations in their name
+      const knownVariations = {
+        'wine spirits': ['wine and spirits', 'wine spirits', 'wine spirts'],
+        'walmart': ['walmart', 'wal mart', 'walmart supercenter'],
+        'giant eagle': ['giant eagle', 'giant iggle'],
+        'mcdonalds': ['mcdonalds', 'mcdonald'],
+      };
+      
+      // Normalize merchants for comparison
+      const norm1 = info1.merchant.replace(/\s+/g, '');
+      const norm2 = info2.merchant.replace(/\s+/g, '');
+      
+      // Check known variations
+      for (const [base, variations] of Object.entries(knownVariations)) {
+        const match1 = variations.find(v => info1.merchant.includes(v) || v.includes(info1.merchant));
+        const match2 = variations.find(v => info2.merchant.includes(v) || v.includes(info2.merchant));
+        
+        if (match1 && match2) {
+          console.log('  → Known variation match:', base, '→ 95%');
+          return 0.95;
+        }
+      }
+      
+      // Check if the ENTIRE shorter name is contained in the longer one
+      // This catches "walmart" vs "walmart supercenter" but not "cap one" vs "capital one auto"
+      const shorter = info1.merchant.length < info2.merchant.length ? info1.merchant : info2.merchant;
+      const longer = info1.merchant.length < info2.merchant.length ? info2.merchant : info1.merchant;
+      
+      // Only match if shorter is at the START and is a complete word
+      if (longer.startsWith(shorter + ' ') || longer === shorter) {
+        // Additional check: make sure they're really close in length
+        const lengthRatio = shorter.length / longer.length;
+        if (lengthRatio > 0.6) { // At least 60% same length
+          console.log('  → Prefix match with length check → 90%');
+          return 0.90;
+        }
+      }
+      
+      // Everything else is NOT similar
+      console.log('  → No match → 0%');
+      return 0.0;
+    }
+    
+    function closeCategoryDetails() {
+      document.getElementById('categoryDetails').style.display = 'none';
+    }
+    
+    function displayRecurringPayments(recurring) {
+      const container = document.getElementById('recurringPayments');
+      
+      // Filter out dismissed recurring payments
+      const activeRecurring = recurring.filter(r => {
+        const key = `${r.description.toLowerCase()}_${r.avgAmount.toFixed(2)}`;
+        return !data.dismissedRecurring.includes(key);
+      });
+      
+      if (activeRecurring.length === 0) {
+        const totalDismissed = recurring.length - activeRecurring.length;
+        const dismissedText = totalDismissed > 0 ? ` (${totalDismissed} dismissed)` : '';
+        container.innerHTML = `<p style="color: #86868b; text-align: center; padding: 20px;">No recurring payments detected${dismissedText}</p>`;
+        return;
+      }
+      
+      let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+      
+      activeRecurring.forEach((r, idx) => {
+        // Find original index in full recurring array
+        const originalIndex = recurring.findIndex(rec => 
+          rec.description === r.description && rec.avgAmount === r.avgAmount
+        );
+        
+        const alreadyExists = data.bills.some(b => b.name.toLowerCase().includes(r.description.substring(0, 10).toLowerCase()));
+        
+        html += `
+          <div style="background: #f5f5f7; padding: 16px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 14px; color: #1d1d1f;">${r.description}</div>
+                <div style="font-size: 12px; color: #86868b; margin-top: 4px;">$${r.avgAmount.toFixed(2)} • ${r.frequency} • ${r.count} occurrences</div>
+                ${alreadyExists ? '<div style="font-size: 11px; color: #34c759; margin-top: 4px;">✓ Already in your budget</div>' : ''}
+              </div>
+              <button onclick="dismissRecurring('${r.description.replace(/'/g, "\\'")}', ${r.avgAmount})" 
+                      style="background: #ff3b30; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-left: 8px;">
+                ✕ Dismiss
+              </button>
+            </div>
+            ${!alreadyExists ? `<button onclick="addRecurringToBudget(${originalIndex})" style="background: #007aff; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; width: 100%;">Add to Budget</button>` : ''}
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function dismissRecurring(description, amount) {
+      const key = `${description.toLowerCase()}_${amount.toFixed(2)}`;
+      
+      if (!data.dismissedRecurring.includes(key)) {
+        data.dismissedRecurring.push(key);
+        localStorage.setItem('budgetData', JSON.stringify(data));
+      }
+      
+      // Refresh recurring display
+      const analyzedTransactions = window.analyzedTransactions || [];
+      const recurring = findRecurringPayments(analyzedTransactions);
+      displayRecurringPayments(recurring);
+    }
+    
+    function displayDuplicates(duplicates) {
+      const container = document.getElementById('duplicatePayments');
+      
+      // Filter out dismissed duplicates
+      const activeDuplicates = duplicates.filter(d => {
+        const key = `${d.t1.description}_${d.t1.amount}_${d.t1.date.getTime()}`;
+        return !data.dismissedDuplicates || !data.dismissedDuplicates.includes(key);
+      });
+      
+      if (activeDuplicates.length === 0) {
+        const totalDismissed = duplicates.length - activeDuplicates.length;
+        const dismissedText = totalDismissed > 0 ? ` (${totalDismissed} dismissed)` : '';
+        container.innerHTML = `<p style="color: #86868b; text-align: center; padding: 20px;">No duplicate payments detected${dismissedText}</p>`;
+        return;
+      }
+      
+      let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+      
+      activeDuplicates.forEach((d, index) => {
+        const expandId = `duplicate-${index}`;
+        
+        html += `
+          <div style="background: #fee2e2; border-radius: 8px; overflow: hidden;">
+            <!-- Header - Always Visible -->
+            <div onclick="toggleDuplicateDetails('${expandId}')" 
+                 style="padding: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                 onmouseover="this.style.background='#fecaca'" 
+                 onmouseout="this.style.background='transparent'">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 14px; color: #dc2626; margin-bottom: 4px;">⚠️ Possible Duplicate</div>
+                <div style="font-size: 13px; color: #7f1d1d;">
+                  ${d.t1.description.substring(0, 50)} - $${d.t1.amount.toFixed(2)}
+                </div>
+              </div>
+              <div style="font-size: 12px; color: #991b1b; font-weight: 600;">
+                👆 Click to inspect
+              </div>
+            </div>
+            
+            <!-- Expandable Details -->
+            <div id="${expandId}" style="display: none; border-top: 2px solid #fca5a5; background: #fef2f2; padding: 16px;">
+              <div style="margin-bottom: 16px;">
+                <div style="font-weight: 600; font-size: 13px; color: #991b1b; margin-bottom: 8px;">Transaction Comparison:</div>
+                
+                <!-- Transaction 1 -->
+                <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #dc2626;">
+                  <div style="display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;">
+                    <div style="font-weight: 600; color: #dc2626;">1.</div>
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600; color: #1d1d1f; margin-bottom: 4px;">${d.t1.description}</div>
+                      <div style="font-size: 12px; color: #64748b;">
+                        Date: ${d.t1.date.toLocaleDateString()} ${d.t1.date.toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div style="font-size: 16px; font-weight: 700; color: #dc2626; white-space: nowrap;">
+                      $${d.t1.amount.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Transaction 2 -->
+                <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626;">
+                  <div style="display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;">
+                    <div style="font-weight: 600; color: #dc2626;">2.</div>
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600; color: #1d1d1f; margin-bottom: 4px;">${d.t2.description}</div>
+                      <div style="font-size: 12px; color: #64748b;">
+                        Date: ${d.t2.date.toLocaleDateString()} ${d.t2.date.toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div style="font-size: 16px; font-weight: 700; color: #dc2626; white-space: nowrap;">
+                      $${d.t2.amount.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Analysis -->
+              <div style="background: #fff7ed; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #f59e0b;">
+                <div style="font-size: 12px; color: #92400e;">
+                  <strong>Analysis:</strong><br>
+                  • Same amount: $${d.t1.amount.toFixed(2)}<br>
+                  • Time difference: ${Math.abs(d.t2.date - d.t1.date) / (1000 * 60)} minutes<br>
+                  • Similarity: ${(d.similarity * 100).toFixed(0)}%
+                </div>
+              </div>
+              
+              <!-- Actions -->
+              <div style="display: flex; gap: 8px;">
+                <button onclick="dismissDuplicate('${d.t1.description.replace(/'/g, "\\'")}', ${d.t1.amount}, ${d.t1.date.getTime()}); toggleDuplicateDetails('${expandId}')" 
+                        style="flex: 1; background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                  ✓ Not a Duplicate - Dismiss
+                </button>
+                <button onclick="alert('Feature coming soon: Mark one transaction for removal'); toggleDuplicateDetails('${expandId}')" 
+                        style="flex: 1; background: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                  🗑️ Delete Duplicate
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function toggleDuplicateDetails(expandId) {
+      const element = document.getElementById(expandId);
+      if (!element) return;
+      
+      if (element.style.display === 'none') {
+        element.style.display = 'block';
+      } else {
+        element.style.display = 'none';
+      }
+    }
+    
+    function dismissDuplicate(description, amount, timestamp) {
+      const key = `${description}_${amount}_${timestamp}`;
+      
+      data.dismissedDuplicates = data.dismissedDuplicates || [];
+      if (!data.dismissedDuplicates.includes(key)) {
+        data.dismissedDuplicates.push(key);
+        localStorage.setItem('budgetData', JSON.stringify(data));
+      }
+      
+      // Refresh duplicates display
+      const analyzedTransactions = window.analyzedTransactions || [];
+      const duplicates = findDuplicates(analyzedTransactions);
+      displayDuplicates(duplicates);
+    }
+    
+    function addRecurringToBudget(index) {
+      const recurringItem = findRecurringPayments(analyzedTransactions)[index];
+      const lastDate = recurringItem.lastDate;
+      const dueDay = lastDate.getDate();
+      
+      // Add as a bill
+      const billData = {
+        name: recurringItem.description.substring(0, 30).trim(),
+        amount: recurringItem.avgAmount.toFixed(2),
+        frequency: recurringItem.frequency,
+        dueDay: dueDay
+      };
+      
+      data.bills.push(billData);
+      localStorage.setItem('budgetData', JSON.stringify(data));
+      
+      renderCalendar();
+      renderSummary();
+      
+      alert(`Added "${billData.name}" to your bills!\n\nAmount: $${billData.amount}\nFrequency: ${billData.frequency}\nDue Day: ${dueDay}`);
+      
+      // Refresh the recurring payments display
+      const allRecurring = findRecurringPayments(analyzedTransactions);
+      displayRecurringPayments(allRecurring);
+    }
+    
+    // ===== CHARTS AND VISUALIZATION =====
+    
+    let currentChartType = 'pie'; // Track current chart type
+    
+    function showSpendingCharts() {
+      if (!window.analyzedTransactions || window.analyzedTransactions.length === 0) {
+        alert('No transactions to visualize. Please analyze statements first.');
+        return;
+      }
+      
+      const categories = window.categoryData || {};
+      const transactions = window.analyzedTransactions;
+      
+      // Calculate date range
+      const dates = transactions.map(t => t.date);
+      const minDate = new Date(Math.min(...dates));
+      const maxDate = new Date(Math.max(...dates));
+      
+      // Create modal with charts
+      const modalHTML = `
+        <div id="chartsModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px;">
+          <div style="background: white; border-radius: 16px; padding: 24px; max-width: 1000px; width: 100%; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h2 style="margin: 0; font-size: 24px;">📊 Spending Analysis</h2>
+              <button onclick="closeChartsModal()" style="background: #ff3b30; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Close
+              </button>
+            </div>
+            
+            <!-- Date Range -->
+            <div style="background: #f5f5f7; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+              <strong>Period:</strong> ${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}
+            </div>
+            
+            <!-- Category Chart with Toggle -->
+            <div style="background: #f5f5f7; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; font-size: 18px;">Spending by Category</h3>
+                <div style="display: flex; gap: 8px;">
+                  <button id="pieChartBtn" onclick="switchCategoryChart('pie')" 
+                          style="background: #007aff; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    🥧 Pie Chart
+                  </button>
+                  <button id="barChartBtn" onclick="switchCategoryChart('bar')" 
+                          style="background: #e5e5e7; color: #1d1d1f; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    📊 Bar Chart
+                  </button>
+                </div>
+              </div>
+              <canvas id="categoryChart" width="400" height="400"></canvas>
+            </div>
+            
+            <!-- Monthly Trend -->
+            <div style="background: #f5f5f7; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+              <h3 style="margin: 0 0 16px 0; font-size: 18px;">Monthly Spending Trend</h3>
+              <canvas id="trendChart" width="400" height="200"></canvas>
+            </div>
+            
+            <!-- Top Categories -->
+            <div style="background: #f5f5f7; padding: 20px; border-radius: 12px;">
+              <h3 style="margin: 0 0 16px 0; font-size: 18px;">Top Spending Categories</h3>
+              <div id="topCategories"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+      
+      // Draw charts
+      setTimeout(() => {
+        drawCategoryChart(categories, 'pie');
+        drawMonthlyTrendChart(transactions);
+        displayTopCategories(categories);
+      }, 100);
+    }
+    
+    function switchCategoryChart(chartType) {
+      currentChartType = chartType;
+      const categories = window.categoryData || {};
+      
+      // Update button styles
+      const pieBtn = document.getElementById('pieChartBtn');
+      const barBtn = document.getElementById('barChartBtn');
+      
+      if (chartType === 'pie') {
+        pieBtn.style.background = '#007aff';
+        pieBtn.style.color = 'white';
+        barBtn.style.background = '#e5e5e7';
+        barBtn.style.color = '#1d1d1f';
+      } else {
+        barBtn.style.background = '#007aff';
+        barBtn.style.color = 'white';
+        pieBtn.style.background = '#e5e5e7';
+        pieBtn.style.color = '#1d1d1f';
+      }
+      
+      // Redraw chart
+      drawCategoryChart(categories, chartType);
+    }
+    
+    function drawCategoryChart(categories, chartType) {
+      const canvas = document.getElementById('categoryChart');
+      if (!canvas) return;
+      
+      // Clear canvas
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (chartType === 'pie') {
+        drawCategoryPieChart(categories);
+      } else {
+        drawCategoryBarChart(categories);
+      }
+    }
+    
+    function closeChartsModal() {
+      const modal = document.getElementById('chartsModal');
+      if (modal) modal.remove();
+      currentChartType = 'pie'; // Reset to default
+    }
+    
+    function drawCategoryPieChart(categories) {
+      const canvas = document.getElementById('categoryChart');
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      const data = Object.entries(categories)
+        .filter(([name, cat]) => cat.count > 0)
+        .sort((a, b) => b[1].total - a[1].total);
+      
+      const total = data.reduce((sum, [, cat]) => sum + cat.total, 0);
+      
+      // Colors for categories
+      const colors = [
+        '#007aff', '#34c759', '#ff3b30', '#ff9500', '#5856d6',
+        '#ff2d55', '#5ac8fa', '#ffcc00', '#af52de', '#32ade6'
+      ];
+      
+      // Draw pie chart
+      let startAngle = -Math.PI / 2;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = Math.min(centerX, centerY) - 40;
+      
+      data.forEach(([name, cat], i) => {
+        const sliceAngle = (cat.total / total) * 2 * Math.PI;
+        
+        // Draw slice
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw label
+        const labelAngle = startAngle + sliceAngle / 2;
+        const labelX = centerX + Math.cos(labelAngle) * (radius * 0.7);
+        const labelY = centerY + Math.sin(labelAngle) * (radius * 0.7);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const percentage = ((cat.total / total) * 100).toFixed(0);
+        if (percentage >= 5) { // Only show label if slice is large enough
+          ctx.fillText(`${percentage}%`, labelX, labelY);
+        }
+        
+        startAngle += sliceAngle;
+      });
+      
+      // Draw legend
+      let legendY = 20;
+      data.forEach(([name, cat], i) => {
+        const legendX = canvas.width - 150;
+        
+        // Color box
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(legendX, legendY, 15, 15);
+        
+        // Text
+        ctx.fillStyle = '#1d1d1f';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${name}: $${cat.total.toFixed(0)}`, legendX + 20, legendY + 10);
+        
+        legendY += 20;
+      });
+    }
+    
+    function drawCategoryBarChart(categories) {
+      const canvas = document.getElementById('categoryChart');
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      const data = Object.entries(categories)
+        .filter(([name, cat]) => cat.count > 0)
+        .sort((a, b) => b[1].total - a[1].total);
+      
+      if (data.length === 0) return;
+      
+      const total = data.reduce((sum, [, cat]) => sum + cat.total, 0);
+      
+      // Colors for categories
+      const colors = [
+        '#007aff', '#34c759', '#ff3b30', '#ff9500', '#5856d6',
+        '#ff2d55', '#5ac8fa', '#ffcc00', '#af52de', '#32ade6'
+      ];
+      
+      // Calculate chart dimensions
+      const padding = 60;
+      const leftPadding = 150; // Extra space for category names
+      const chartWidth = canvas.width - leftPadding - padding;
+      const chartHeight = canvas.height - padding * 2;
+      
+      const barHeight = chartHeight / data.length;
+      const maxValue = Math.max(...data.map(([, cat]) => cat.total));
+      
+      // Draw bars
+      data.forEach(([name, cat], i) => {
+        const barWidth = (cat.total / maxValue) * chartWidth;
+        const x = leftPadding;
+        const y = padding + i * barHeight;
+        
+        // Draw bar
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(x, y + 5, barWidth, barHeight - 10);
+        
+        // Draw category name (left side)
+        ctx.fillStyle = '#1d1d1f';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        
+        // Truncate long names
+        const displayName = name.length > 18 ? name.substring(0, 15) + '...' : name;
+        ctx.fillText(displayName, leftPadding - 10, y + barHeight / 2);
+        
+        // Draw value (on or next to bar)
+        ctx.textAlign = 'left';
+        const valueText = `$${cat.total.toFixed(0)}`;
+        const valueX = x + barWidth + 5;
+        
+        // If bar is too short, show value outside
+        if (barWidth > 80) {
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 12px Arial';
+          ctx.fillText(valueText, x + 10, y + barHeight / 2);
+        } else {
+          ctx.fillStyle = '#1d1d1f';
+          ctx.font = '12px Arial';
+          ctx.fillText(valueText, valueX, y + barHeight / 2);
+        }
+        
+        // Draw percentage
+        const percentage = ((cat.total / total) * 100).toFixed(1);
+        ctx.fillStyle = '#86868b';
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${percentage}%`, canvas.width - padding + 10, y + barHeight / 2);
+      });
+      
+      // Draw Y axis
+      ctx.strokeStyle = '#86868b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(leftPadding, padding);
+      ctx.lineTo(leftPadding, padding + chartHeight);
+      ctx.stroke();
+      
+      // Draw title
+      ctx.fillStyle = '#1d1d1f';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Spending Amount ($)', canvas.width / 2, padding - 30);
+    }
+    
+    function drawMonthlyTrendChart(transactions) {
+      const canvas = document.getElementById('trendChart');
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      
+      // Group by month
+      const byMonth = {};
+      transactions.forEach(t => {
+        const monthKey = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+        byMonth[monthKey] = (byMonth[monthKey] || 0) + t.amount;
+      });
+      
+      const months = Object.keys(byMonth).sort();
+      const values = months.map(m => byMonth[m]);
+      
+      if (months.length === 0) return;
+      
+      // Calculate chart dimensions
+      const padding = 60;
+      const chartWidth = canvas.width - padding * 2;
+      const chartHeight = canvas.height - padding * 2;
+      
+      const maxValue = Math.max(...values);
+      const barWidth = chartWidth / months.length;
+      
+      // Draw bars
+      ctx.fillStyle = '#007aff';
+      values.forEach((value, i) => {
+        const barHeight = (value / maxValue) * chartHeight;
+        const x = padding + i * barWidth;
+        const y = padding + chartHeight - barHeight;
+        
+        ctx.fillRect(x + 5, y, barWidth - 10, barHeight);
+        
+        // Draw value on top
+        ctx.fillStyle = '#1d1d1f';
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`$${value.toFixed(0)}`, x + barWidth / 2, y - 5);
+        ctx.fillStyle = '#007aff';
+      });
+      
+      // Draw axes
+      ctx.strokeStyle = '#86868b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, padding + chartHeight);
+      ctx.lineTo(padding + chartWidth, padding + chartHeight);
+      ctx.stroke();
+      
+      // Draw month labels
+      ctx.fillStyle = '#1d1d1f';
+      ctx.font = '11px Arial';
+      ctx.textAlign = 'center';
+      months.forEach((month, i) => {
+        const [year, mon] = month.split('-');
+        const monthName = new Date(year, parseInt(mon) - 1).toLocaleDateString('en-US', { month: 'short' });
+        const x = padding + i * barWidth + barWidth / 2;
+        ctx.fillText(monthName, x, canvas.height - padding + 20);
+      });
+    }
+    
+    function displayTopCategories(categories) {
+      const container = document.getElementById('topCategories');
+      if (!container) return;
+      
+      const sorted = Object.entries(categories)
+        .filter(([name, cat]) => cat.count > 0)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 5);
+      
+      const total = sorted.reduce((sum, [, cat]) => sum + cat.total, 0);
+      
+      let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+      
+      sorted.forEach(([name, cat], i) => {
+        const percentage = ((cat.total / total) * 100).toFixed(1);
+        const avgPerTransaction = cat.total / cat.count;
+        
+        html += `
+          <div style="background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #007aff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="font-weight: 600; font-size: 16px; color: #1d1d1f;">${i + 1}. ${name}</div>
+              <div style="font-size: 20px; font-weight: 700; color: #007aff;">$${cat.total.toFixed(2)}</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px; color: #86868b;">
+              <span>${cat.count} transactions</span>
+              <span>Avg: $${avgPerTransaction.toFixed(2)}</span>
+              <span>${percentage}% of total</span>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    // ===== EXPORT FUNCTIONS =====
+    
+    function exportToCSV() {
+      if (!window.analyzedTransactions || window.analyzedTransactions.length === 0) {
+        alert('No transactions to export. Please analyze statements first.');
+        return;
+      }
+      
+      const transactions = window.analyzedTransactions;
+      const categories = window.categoryData || {};
+      
+      // Create CSV content
+      let csv = 'Date,Description,Amount,Category\n';
+      
+      transactions.forEach(t => {
+        const date = t.date.toLocaleDateString();
+        const description = `"${t.description.replace(/"/g, '""')}"`;
+        const amount = t.amount.toFixed(2);
+        const category = t.category || 'Uncategorized';
+        
+        csv += `${date},${description},${amount},${category}\n`;
+      });
+      
+      // Add summary
+      csv += '\n\nCATEGORY SUMMARY\n';
+      csv += 'Category,Total,Count,Average\n';
+      
+      Object.entries(categories)
+        .filter(([, cat]) => cat.count > 0)
+        .sort((a, b) => b[1].total - a[1].total)
+        .forEach(([name, cat]) => {
+          const avg = (cat.total / cat.count).toFixed(2);
+          csv += `${name},${cat.total.toFixed(2)},${cat.count},${avg}\n`;
+        });
+      
+      // Download
+      downloadFile(csv, 'spending-analysis.csv', 'text/csv');
+    }
+    
+    function exportToExcel() {
+      if (!window.analyzedTransactions || window.analyzedTransactions.length === 0) {
+        alert('No transactions to export. Please analyze statements first.');
+        return;
+      }
+      
+      const transactions = window.analyzedTransactions;
+      const categories = window.categoryData || {};
+      
+      // Group by month for monthly breakdown
+      const byMonth = {};
+      transactions.forEach(t => {
+        const monthKey = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+        const monthName = t.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        
+        if (!byMonth[monthKey]) {
+          byMonth[monthKey] = { name: monthName, total: 0, byCategory: {} };
+        }
+        
+        byMonth[monthKey].total += t.amount;
+        
+        const cat = t.category || 'Uncategorized';
+        byMonth[monthKey].byCategory[cat] = (byMonth[monthKey].byCategory[cat] || 0) + t.amount;
+      });
+      
+      // Create comprehensive Excel-style CSV
+      let csv = 'SPENDING ANALYSIS REPORT\n';
+      csv += `Generated: ${new Date().toLocaleString()}\n`;
+      csv += `Period: ${new Date(Math.min(...transactions.map(t => t.date))).toLocaleDateString()} - ${new Date(Math.max(...transactions.map(t => t.date))).toLocaleDateString()}\n`;
+      csv += `Total Transactions: ${transactions.length}\n\n`;
+      
+      // YTD Summary
+      const ytdTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
+      csv += 'YEAR-TO-DATE SUMMARY\n';
+      csv += `Total Spending,$${ytdTotal.toFixed(2)}\n`;
+      csv += `Average per Transaction,$${(ytdTotal / transactions.length).toFixed(2)}\n\n`;
+      
+      // Category Breakdown
+      csv += 'CATEGORY BREAKDOWN\n';
+      csv += 'Category,Total,% of Total,Count,Average per Transaction\n';
+      
+      Object.entries(categories)
+        .filter(([, cat]) => cat.count > 0)
+        .sort((a, b) => b[1].total - a[1].total)
+        .forEach(([name, cat]) => {
+          const percentage = ((cat.total / ytdTotal) * 100).toFixed(1);
+          const avg = (cat.total / cat.count).toFixed(2);
+          csv += `${name},${cat.total.toFixed(2)},${percentage}%,${cat.count},${avg}\n`;
+        });
+      
+      // Monthly Breakdown
+      csv += '\n\nMONTHLY BREAKDOWN\n';
+      csv += 'Month,Total Spending\n';
+      
+      Object.entries(byMonth)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([key, data]) => {
+          csv += `${data.name},${data.total.toFixed(2)}\n`;
+        });
+      
+      // Detailed Monthly by Category
+      csv += '\n\nMONTHLY SPENDING BY CATEGORY\n';
+      const allCategories = [...new Set(Object.values(byMonth).flatMap(m => Object.keys(m.byCategory)))];
+      csv += 'Month,' + allCategories.join(',') + ',Total\n';
+      
+      Object.entries(byMonth)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([key, data]) => {
+          const row = [data.name];
+          allCategories.forEach(cat => {
+            row.push((data.byCategory[cat] || 0).toFixed(2));
+          });
+          row.push(data.total.toFixed(2));
+          csv += row.join(',') + '\n';
+        });
+      
+      // All Transactions
+      csv += '\n\nALL TRANSACTIONS\n';
+      csv += 'Date,Description,Amount,Category\n';
+      
+      transactions
+        .sort((a, b) => b.date - a.date)
+        .forEach(t => {
+          const date = t.date.toLocaleDateString();
+          const description = `"${t.description.replace(/"/g, '""')}"`;
+          const amount = t.amount.toFixed(2);
+          const category = t.category || 'Uncategorized';
+          
+          csv += `${date},${description},${amount},${category}\n`;
+        });
+      
+      // Download
+      downloadFile(csv, 'spending-analysis-detailed.csv', 'text/csv');
+    }
+    
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+    
+  </script>
+</body>
+</html>
